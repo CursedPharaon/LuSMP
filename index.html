@@ -260,8 +260,8 @@
         <h1>🏕️ LuSMP</h1>
         <div class="sub">Хардкорная 2D песочница</div>
         <div class="login-row">
-            <input type="text" id="nameInput" placeholder="Ник" value="pharaon">
-            <input type="password" id="passwordInput" placeholder="Пароль" value="admin123">
+            <input type="text" id="nameInput" placeholder="Ник">
+            <input type="password" id="passwordInput" placeholder="Пароль">
         </div>
         <button onclick="login()">🎮 Войти</button>
         <div id="loginError"></div>
@@ -304,28 +304,21 @@ let keys = {};
 let mouse = { x: 0, y: 0, worldX: 0, worldY: 0 };
 let playerId = null;
 let isLoggedIn = false;
-let chatMessages = [];
 let chatMinimized = true;
 let toastTimeout;
 let seasonEnd = null;
 
 // ============================================================
-//  ЗАПРОСЫ К TURSO (ПОЛНОСТЬЮ ПЕРЕПИСАНЫ)
+//  ЗАПРОСЫ К TURSO (САМЫЙ ПРОСТОЙ ВАРИАНТ)
 // ============================================================
 async function queryTurso(sql, params = []) {
-    // Формируем правильный запрос для Turso
-    // ВСЕ параметры передаются как СТРОКИ!
     const body = {
         requests: [{
             type: "execute",
-            stmt: {
-                sql: sql
-            }
+            stmt: { sql: sql }
         }]
     };
     
-    // Добавляем параметры ТОЛЬКО если они есть
-    // И ВСЕГДА как строки (Turso не любит числа в args)
     if (params.length > 0) {
         body.requests[0].stmt.args = params.map(p => String(p));
     }
@@ -884,8 +877,8 @@ async function checkSeason() {
 //  ЛОГИН
 // ============================================================
 async function login() {
-    const name = document.getElementById('nameInput').value.trim() || 'Player';
-    const password = document.getElementById('passwordInput').value.trim() || '123';
+    const name = document.getElementById('nameInput').value.trim();
+    const password = document.getElementById('passwordInput').value.trim();
     const errorEl = document.getElementById('loginError');
     const loginBtn = document.querySelector('#loginOverlay button');
     const dbStatus = document.getElementById('dbStatus');
@@ -950,7 +943,6 @@ async function login() {
         );
         
         let playerData;
-        let isNew = false;
         
         if (result && result.rows && result.rows.length > 0) {
             const row = result.rows[0];
@@ -960,13 +952,13 @@ async function login() {
             }
             playerData = {
                 id: row[0], name: row[1], password: row[2] || password,
-                x: row[3], y: row[4], hp: row[5], lives: row[6] || MAX_LIVES,
-                kills: row[7] || 0, money: row[8] || 0,
+                x: parseFloat(row[3]) || 0, y: parseFloat(row[4]) || 0,
+                hp: parseFloat(row[5]) || 100, lives: parseInt(row[6]) || MAX_LIVES,
+                kills: parseInt(row[7]) || 0, money: parseInt(row[8]) || 0,
                 faction: row[9] || 'none', factionRole: row[10] || '',
                 isAdmin: row[11] === 1, isBanned: row[12] === 1
             };
         } else {
-            isNew = true;
             const x = Math.random() * 100 * BLOCK + 25 * BLOCK;
             const y = Math.random() * 100 * BLOCK + 25 * BLOCK;
             const isAdmin = (name === ADMIN_NAME);
@@ -993,7 +985,7 @@ async function login() {
         const invResult = await queryTurso('SELECT item, count FROM inventory WHERE player_id = ?', [String(playerData.id)]);
         if (invResult && invResult.rows) {
             inventory = {};
-            invResult.rows.forEach(r => { inventory[r[0]] = parseInt(r[1]); });
+            invResult.rows.forEach(r => { inventory[r[0]] = parseInt(r[1]) || 0; });
         }
         
         // Создаём игрока
@@ -1048,11 +1040,11 @@ async function loadPlayers() {
             result.rows.forEach(row => {
                 if (!players[row[0]]) {
                     const p = new Player({
-                        id: row[0], name: row[1], x: parseFloat(row[2]), y: parseFloat(row[3]),
-                        hp: row[4], lives: row[5] || MAX_LIVES, kills: row[6] || 0,
-                        money: row[7] || 0, faction: row[8] || 'none',
-                        factionRole: row[9] || '', isAdmin: row[10] === 1,
-                        isBanned: row[11] === 1
+                        id: row[0], name: row[1], x: parseFloat(row[2]) || 0, y: parseFloat(row[3]) || 0,
+                        hp: parseFloat(row[4]) || 100, lives: parseInt(row[5]) || MAX_LIVES,
+                        kills: parseInt(row[6]) || 0, money: parseInt(row[7]) || 0,
+                        faction: row[8] || 'none', factionRole: row[9] || '',
+                        isAdmin: row[10] === 1, isBanned: row[11] === 1
                     });
                     players[row[0]] = p;
                 }
