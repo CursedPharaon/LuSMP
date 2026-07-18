@@ -114,7 +114,7 @@
             bottom: 80px;
             left: 20px;
             width: 500px;
-            max-height: 350px;
+            max-height: 400px;
             background: rgba(0, 0, 0, 0.85);
             border-radius: 12px;
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -133,7 +133,7 @@
             flex: 1;
             overflow-y: auto;
             padding: 8px 12px;
-            max-height: 280px;
+            max-height: 330px;
             font-size: 14px;
             color: #ddd;
             line-height: 1.5;
@@ -416,10 +416,9 @@
         let seasonEnd = null;
 
         // ============================================================
-        //  ЗАПРОС К TURSO
+        //  ЗАПРОС К TURSO (БЕЗ ЛОГОВ)
         // ============================================================
         async function queryTurso(sql) {
-            console.log('📤 SQL:', sql);
             const resp = await fetch(`${TURSO_URL}/v2/pipeline`, {
                 method: 'POST',
                 headers: {
@@ -435,7 +434,6 @@
             });
 
             const data = await resp.json();
-            console.log('📥 Ответ:', JSON.stringify(data, null, 2));
 
             if (!resp.ok) {
                 throw new Error(`HTTP ${resp.status}: ${data.error || JSON.stringify(data)}`);
@@ -453,12 +451,11 @@
         }
 
         // ============================================================
-        //  ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО ПОЛУЧЕНИЯ СТРОКИ ИЗ ОБЪЕКТА
+        //  ФУНКЦИИ ДЛЯ БЕЗОПАСНОЙ РАБОТЫ С ДАННЫМИ
         // ============================================================
         function safeString(value) {
             if (value === undefined || value === null) return '';
             if (typeof value === 'object') {
-                // Если это объект — достаём первое значение
                 const val = value.value || value[0] || Object.values(value)[0] || '';
                 return String(val).trim();
             }
@@ -466,13 +463,11 @@
         }
 
         function safeNumber(value) {
-            const str = safeString(value);
-            return parseFloat(str) || 0;
+            return parseFloat(safeString(value)) || 0;
         }
 
         function safeInt(value) {
-            const str = safeString(value);
-            return parseInt(str) || 0;
+            return parseInt(safeString(value)) || 0;
         }
 
         // ============================================================
@@ -984,7 +979,7 @@
         }
 
         // ============================================================
-        //  ЛОГИН (С ПРАВИЛЬНОЙ РАБОТОЙ С ОБЪЕКТАМИ)
+        //  ЛОГИН
         // ============================================================
         async function login() {
             const name = document.getElementById('nameInput').value.trim();
@@ -1001,7 +996,7 @@
             dbStatus.style.color = '#ffd700';
 
             try {
-                // СОЗДАЁМ ТАБЛИЦЫ (ЕСЛИ ИХ НЕТ)
+                // СОЗДАЁМ ТАБЛИЦЫ
                 await queryTurso(`
                     CREATE TABLE IF NOT EXISTS players (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1037,22 +1032,18 @@
                     )
                 `);
 
-                // ИЩЕМ ИГРОКА В БД
+                // ИЩЕМ ИГРОКА
                 const safeName = name.replace(/'/g, "''");
-                let result = await queryTurso(`SELECT id, name, password, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE name = '${safeName}'`);
+                let result = await queryTurso(
+                    `SELECT id, name, password, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE name = '${safeName}'`
+                    );
 
                 let playerData;
 
                 if (result && result.rows && result.rows.length > 0) {
                     const row = result.rows[0];
-
-                    // === РАЗБИРАЕМ ПАРОЛЬ ИЗ БД ===
                     const dbPassword = safeString(row[2]);
                     const inputPassword = password.trim();
-
-                    console.log('🔍 Сравнение паролей:');
-                    console.log('📦 Из БД (обработанный):', JSON.stringify(dbPassword));
-                    console.log('⌨️ С формы:', JSON.stringify(inputPassword));
 
                     if (dbPassword !== inputPassword) {
                         throw new Error('❌ Неверный пароль!');
@@ -1074,7 +1065,7 @@
                         isBanned: row[12] === '1' || row[12] === 1 || row[12] === true
                     };
                 } else {
-                    // ЕСЛИ ИГРОКА НЕТ — СОЗДАЁМ НОВОГО
+                    // НОВЫЙ ИГРОК
                     const x = Math.random() * 100 * BLOCK + 25 * BLOCK;
                     const y = Math.random() * 100 * BLOCK + 25 * BLOCK;
                     const isAdmin = (name === ADMIN_NAME);
@@ -1099,7 +1090,6 @@
                     };
                 }
 
-                // ПРОВЕРКА НА БАН
                 if (playerData.isBanned) {
                     throw new Error('⛔ Вы забанены до конца сезона!');
                 }
@@ -1111,7 +1101,6 @@
                     invResult.rows.forEach(r => { inventory[safeString(r[0])] = safeInt(r[1]); });
                 }
 
-                // СОЗДАЁМ ОБЪЕКТ ИГРОКА
                 player = new Player(playerData);
                 playerId = playerData.id;
                 players[playerData.id] = player;
@@ -1119,15 +1108,15 @@
 
                 await loadPlayers();
 
-                // ЗАГРУЖАЕМ ИСТОРИЮ ЧАТА
-                const chatResult = await queryTurso('SELECT player_name, message, created_at FROM chat ORDER BY id DESC LIMIT 20');
+                // ИСТОРИЯ ЧАТА
+                const chatResult = await queryTurso(
+                    'SELECT player_name, message, created_at FROM chat ORDER BY id DESC LIMIT 20');
                 if (chatResult && chatResult.rows) {
                     chatResult.rows.reverse().forEach(row => {
                         addChatMessage('user', safeString(row[1]), safeString(row[0]));
                     });
                 }
 
-                // ЗАПУСКАЕМ ИГРУ
                 document.getElementById('loginOverlay').classList.add('hidden');
                 document.getElementById('playerNameDisplay').textContent = player.name;
                 document.getElementById('factionDisplay').textContent = player.factionDisplay;
@@ -1155,7 +1144,9 @@
         async function loadPlayers() {
             if (!playerId) return;
             try {
-                const result = await queryTurso(`SELECT id, name, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE id != '${playerId}' AND isBanned = '0'`);
+                const result = await queryTurso(
+                    `SELECT id, name, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE id != '${playerId}' AND isBanned = '0'`
+                );
                 if (result && result.rows) {
                     result.rows.forEach(row => {
                         if (!players[row[0]]) {
@@ -1203,9 +1194,9 @@
         }
 
         // ============================================================
-        //  СОХРАНЕНИЕ (С ПАРОЛЕМ)
+        //  СОХРАНЕНИЕ (КАЖДЫЕ 10 СЕКУНД)
         // ============================================================
-        setInterval(async () => {
+        async function saveGame() {
             if (!player || !playerId || !isLoggedIn) return;
             try {
                 await queryTurso(
@@ -1231,7 +1222,15 @@
                     }
                 }
             } catch (e) { console.error('Ошибка сохранения:', e); }
-        }, 15000);
+        }
+
+        // АВТОСОХРАНЕНИЕ КАЖДЫЕ 10 СЕКУНД
+        setInterval(saveGame, 10000);
+
+        // СОХРАНЕНИЕ ПРИ ЗАКРЫТИИ СТРАНИЦЫ
+        window.addEventListener('beforeunload', function() {
+            saveGame();
+        });
 
         // ============================================================
         //  ИГРОВОЙ ЦИКЛ
