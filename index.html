@@ -738,7 +738,8 @@ async function login() {
 
         if (result && result.rows && result.rows.length > 0) {
             const row = result.rows[0];
-            const dbPassword = (row[2] || '').trim();
+            // === БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ПАРОЛЯ (СТРОКА) ===
+            const dbPassword = row[2] !== undefined && row[2] !== null ? String(row[2]).trim() : '';
             const inputPassword = password.trim();
 
             console.log('🔍 Сравнение паролей:');
