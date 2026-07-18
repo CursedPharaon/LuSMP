@@ -3,49 +3,323 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LuSMP - 2D игра</title>
+    <title>LuSMP - 2D хардкор</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
-        body { background: #0a0a0f; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        #gameContainer { position: relative; border: 3px solid #2a2a3a; border-radius: 12px; }
-        canvas { display: block; background: #1a237e; border-radius: 10px; cursor: crosshair; }
-        #ui { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; pointer-events: none; flex-wrap: wrap; gap: 8px; }
-        .hud { background: rgba(0,0,0,0.7); padding: 8px 14px; border-radius: 8px; color: #fff; font-size: 13px; backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.1); }
+        body, html { 
+            width: 100%; height: 100%; 
+            background: #0a0a0f; 
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: #0a0a0f;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #1a237e;
+            cursor: crosshair;
+        }
+        /* HUD */
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            flex-wrap: wrap;
+            gap: 6px;
+            z-index: 10;
+        }
+        .hud {
+            background: rgba(0,0,0,0.75);
+            padding: 6px 14px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.08);
+            pointer-events: auto;
+        }
         .hud span { color: #ffd700; font-weight: bold; }
-        #loginOverlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 10px; backdrop-filter: blur(10px); z-index: 100; }
-        #loginOverlay h1 { color: #ffd700; font-size: 36px; margin-bottom: 10px; }
-        #loginOverlay p { color: #888; margin-bottom: 20px; }
-        #loginOverlay input { background: #1e1e2e; border: 1px solid #2a2a3a; color: #fff; padding: 10px 16px; border-radius: 8px; margin: 4px; width: 200px; font-size: 14px; }
-        #loginOverlay button { background: #ffd700; color: #000; border: none; padding: 10px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; transition: 0.2s; }
-        #loginOverlay button:hover { transform: scale(1.05); }
-        .login-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-        .hidden { display: none !important; }
-        #errorMsg { color: #ff6b6b; font-size: 14px; margin-top: 10px; display: none; max-width: 400px; text-align: center; }
-        #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 10px 24px; border-radius: 10px; font-size: 14px; border-left: 4px solid #ffd700; opacity: 0; transition: 0.3s; z-index: 999; }
+        .hud .life { color: #ff6b6b; }
+        .hud .law { color: #4fc3f7; }
+
+        /* Инвентарь */
+        #inventory {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 6px 10px;
+            border-radius: 12px;
+            display: flex;
+            gap: 4px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(8px);
+            pointer-events: auto;
+            z-index: 10;
+        }
+        .slot {
+            width: 44px;
+            height: 44px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 6px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #fff;
+            transition: 0.15s;
+            position: relative;
+        }
+        .slot.active { border-color: #ffd700; background: rgba(255,215,0,0.12); }
+        .slot .count { font-size: 9px; color: #aaa; position: absolute; bottom: 1px; right: 3px; }
+
+        /* Чат */
+        #chatContainer {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            width: 340px;
+            max-height: 200px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            pointer-events: auto;
+            transition: 0.3s;
+        }
+        #chatContainer.minimized {
+            max-height: 36px;
+            overflow: hidden;
+        }
+        #chatMessages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 6px 10px;
+            max-height: 160px;
+            font-size: 12px;
+            color: #ccc;
+        }
+        #chatMessages .msg { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        #chatMessages .msg .name { font-weight: bold; }
+        #chatMessages .msg .time { color: #555; font-size: 10px; margin-right: 6px; }
+        #chatMessages .system { color: #ffd700; font-style: italic; }
+        #chatMessages .admin { color: #ff6b6b; }
+        #chatMessages .law { color: #4fc3f7; }
+        #chatInput {
+            display: flex;
+            padding: 4px 8px;
+            gap: 6px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        #chatInput input {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: none;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            outline: none;
+        }
+        #chatInput input::placeholder { color: #555; }
+        #chatInput button {
+            background: #ffd700;
+            color: #000;
+            border: none;
+            padding: 2px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        #chatToggle {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            z-index: 11;
+            display: none;
+        }
+
+        /* Логин */
+        #loginOverlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.92);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+        #loginOverlay h1 {
+            color: #ffd700;
+            font-size: 44px;
+            margin-bottom: 6px;
+            text-shadow: 0 0 60px rgba(255,215,0,0.15);
+        }
+        #loginOverlay .sub {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        #loginOverlay input {
+            background: #1a1a2e;
+            border: 1px solid #2a2a3a;
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 8px;
+            margin: 4px;
+            width: 220px;
+            font-size: 14px;
+            outline: none;
+            transition: 0.2s;
+        }
+        #loginOverlay input:focus { border-color: #ffd700; }
+        #loginOverlay button {
+            background: #ffd700;
+            color: #000;
+            border: none;
+            padding: 10px 36px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 16px;
+            transition: 0.2s;
+        }
+        #loginOverlay button:hover { transform: scale(1.03); opacity: 0.9; }
+        .login-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+        #loginError { color: #ff6b6b; font-size: 13px; margin-top: 8px; display: none; max-width: 400px; text-align: center; }
+        .login-status { font-size: 11px; color: #666; margin-top: 6px; }
+
+        /* Режим */
+        #modeIndicator {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 13px;
+            background: rgba(0,0,0,0.6);
+            padding: 3px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.08);
+            pointer-events: none;
+            z-index: 10;
+        }
+        /* Тост */
+        #toast {
+            position: fixed;
+            bottom: 140px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 8px 22px;
+            border-radius: 10px;
+            font-size: 13px;
+            border-left: 4px solid #ffd700;
+            pointer-events: none;
+            opacity: 0;
+            transition: 0.3s;
+            z-index: 50;
+        }
         #toast.show { opacity: 1; }
-        .db-status { font-size: 11px; color: #666; margin-top: 8px; }
+        .hidden { display: none !important; }
+        .fullscreen-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 4px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            z-index: 20;
+            pointer-events: auto;
+        }
+        .fullscreen-btn:hover { background: rgba(255,255,255,0.1); }
+        /* Скролл чата */
+        #chatMessages::-webkit-scrollbar { width: 3px; }
+        #chatMessages::-webkit-scrollbar-track { background: transparent; }
+        #chatMessages::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        @media (max-width: 600px) {
+            #chatContainer { width: 260px; left: 10px; bottom: 70px; max-height: 150px; }
+            #inventory { padding: 4px 6px; gap: 2px; }
+            .slot { width: 36px; height: 36px; font-size: 14px; }
+            .hud { font-size: 10px; padding: 4px 10px; }
+            #loginOverlay h1 { font-size: 28px; }
+            #loginOverlay input { width: 160px; }
+        }
     </style>
 </head>
 <body>
 
 <div id="gameContainer">
-    <canvas id="game" width="900" height="600"></canvas>
+    <canvas id="game"></canvas>
     
+    <!-- HUD -->
     <div id="ui">
-        <div class="hud">❤️ <span id="hpDisplay">100</span></div>
-        <div class="hud">👤 <span id="playerNameDisplay">Гость</span></div>
-        <div class="hud">📍 <span id="coordsDisplay">0, 0</span></div>
+        <div class="hud">❤️ <span class="life" id="hpDisplay">3</span> | 💰 <span id="moneyDisplay">0</span></div>
+        <div class="hud">👤 <span id="playerNameDisplay">Гость</span> <span id="factionDisplay"></span></div>
+        <div class="hud">👥 <span id="playersOnline">1</span> | ⏱️ <span id="timerDisplay">34д</span></div>
     </div>
     
+    <div id="modeIndicator">🔫 Боевой режим [TAB]</div>
+    
+    <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶ Полный экран</button>
+    
+    <!-- Инвентарь -->
+    <div id="inventory"></div>
+    
+    <!-- Чат -->
+    <div id="chatContainer" class="minimized">
+        <div id="chatMessages"></div>
+        <div id="chatInput">
+            <input id="chatInputField" placeholder="Напиши..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+    <button id="chatToggle" onclick="toggleChat()">💬</button>
+    
+    <!-- Логин -->
     <div id="loginOverlay">
         <h1>🏕️ LuSMP</h1>
-        <p>Введи имя — и погнали!</p>
+        <div class="sub">Хардкорная 2D песочница</div>
         <div class="login-row">
-            <input type="text" id="nameInput" placeholder="Твой ник" value="Player">
+            <input type="text" id="nameInput" placeholder="Ник" value="Player">
+            <input type="password" id="passwordInput" placeholder="Пароль" value="123">
         </div>
-        <button id="loginBtn" onclick="login()">🎮 Войти</button>
-        <div id="errorMsg"></div>
-        <div class="db-status" id="dbStatus">🔄 Проверка подключения...</div>
+        <button onclick="login()">🎮 Войти</button>
+        <div id="loginError"></div>
+        <div class="login-status" id="dbStatus">🔄 Подключение...</div>
     </div>
     
     <div id="toast">Сообщение</div>
@@ -53,76 +327,76 @@
 
 <script>
 // ============================================================
-//  КОНФИГ TURSO
+//  КОНФИГ
 // ============================================================
 const TURSO_URL = 'https://lusmp-cursedd.aws-eu-west-1.turso.io';
 const TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODQzOTE0OTAsImlkIjoiMDE5Zjc2MDUtMDcwMS03NTU4LThhNmUtZTI0YjJmMTdkZGYwIiwia2lkIjoicWpYbEhLbElGQmJNX29uRDlaWEkyWFVfazVBT3h3X3JIMF9TcUZ6MmU0ZyIsInJpZCI6ImM5ZjMzZTMxLWFkNTgtNDRiNC04MGE1LWIyMWY1NzE0ZGFhZSJ9.YdQIKsgs-KPS5tFQDKTYx54KQ7EKjh3P8FA3_bl_LcXy51lq4JpSFMGIipi3wI3h8Dp_DZTVjw7AMEMpolLRCQ';
 
+const ADMIN_NAME = 'pharaon';
+const ADMIN_PASSWORD = 'admin123';
+const SEASON_DAYS = 34;
+const MAX_LIVES = 3;
+const BLOCK = 32;
+const WORLD_SIZE = 150;
+
 // ============================================================
-//  ИГРА
+//  СОСТОЯНИЕ
 // ============================================================
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const W = 900, H = 600;
-const BLOCK = 32;
-const WORLD_SIZE = 100;
+let W, H;
 
 let player = null;
+let players = {};
 let world = {};
+let bullets = [];
+let inventory = {};
+let selectedSlot = 0;
+let mode = 'combat';
 let camera = { x: 0, y: 0 };
 let keys = {};
-let mouse = { x: 0, y: 0 };
-let playerName = 'Гость';
+let mouse = { x: 0, y: 0, worldX: 0, worldY: 0 };
+let playerId = null;
+let isLoggedIn = false;
+let chatMessages = [];
+let chatMinimized = true;
+let toastTimeout;
+let seasonEnd = null;
+
+// Фракции
+const FACTIONS = {
+    law: { name: 'Закон', color: '#4fc3f7', roles: ['Сотрудник', 'Лидер'] },
+    none: { name: 'Нейтрал', color: '#888', roles: [] }
+};
 
 // ============================================================
-//  ЗАПРОС К TURSO (ЕДИНСТВЕННЫЙ ПРАВИЛЬНЫЙ ФОРМАТ)
+//  ЗАПРОСЫ К TURSO
 // ============================================================
 async function queryTurso(sql, params = []) {
-    // Формируем запрос в правильном формате для Turso
-    const requestBody = {
-        requests: [
-            {
-                type: "execute",
-                stmt: {
-                    sql: sql,
-                    args: params.map(p => {
-                        if (typeof p === 'string') return { type: 'text', value: p };
-                        if (typeof p === 'number') return { type: 'integer', value: p };
-                        if (typeof p === 'boolean') return { type: 'boolean', value: p };
-                        return { type: 'null', value: null };
-                    })
-                }
+    const body = {
+        requests: [{
+            type: "execute",
+            stmt: {
+                sql: sql,
+                args: params.map(p => {
+                    if (typeof p === 'string') return { type: 'text', value: p };
+                    if (typeof p === 'number') return { type: 'integer', value: p };
+                    if (typeof p === 'boolean') return { type: 'boolean', value: p };
+                    return { type: 'null', value: null };
+                })
             }
-        ]
+        }]
     };
-    
-    console.log('📤 SQL:', sql);
-    console.log('📤 Params:', params);
     
     const resp = await fetch(`${TURSO_URL}/v2/pipeline`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${TURSO_TOKEN}`
-        },
-        body: JSON.stringify(requestBody)
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TURSO_TOKEN}` },
+        body: JSON.stringify(body)
     });
-    
     const data = await resp.json();
-    console.log('📥 Ответ:', JSON.stringify(data, null, 2));
-    
-    if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}: ${data.error || JSON.stringify(data)}`);
-    }
-    
-    if (data.results && data.results[0] && data.results[0].response) {
-        if (data.results[0].response.error) {
-            throw new Error(data.results[0].response.error);
-        }
-        if (data.results[0].response.result) {
-            return data.results[0].response.result;
-        }
-    }
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${data.error || JSON.stringify(data)}`);
+    if (data.results?.[0]?.response?.result) return data.results[0].response.result;
+    if (data.results?.[0]?.response?.error) throw new Error(data.results[0].response.error);
     return null;
 }
 
@@ -133,25 +407,193 @@ function initWorld() {
     for (let x = 0; x < WORLD_SIZE; x++) {
         for (let y = 0; y < WORLD_SIZE; y++) {
             const key = `${x},${y}`;
-            const val = Math.sin(x * 0.07) * Math.cos(y * 0.07) + Math.sin(x * 0.13 + y * 0.09) * 0.5;
-            if (val < -0.3) {
-                world[key] = { type: 'water', color: '#4FC3F7' };
-            } else if (val < 0.1) {
-                world[key] = { type: 'sand', color: '#FDD835' };
-            } else if (val < 0.6) {
-                world[key] = { type: 'grass', color: '#7CB342' };
-            } else {
-                world[key] = { type: 'stone', color: '#9E9E9E' };
+            const val = Math.sin(x * 0.05) * Math.cos(y * 0.05) + Math.sin(x * 0.1 + y * 0.07) * 0.5;
+            if (val < -0.3) world[key] = { type: 'water', color: '#4FC3F7', hp: 999 };
+            else if (val < 0.1) world[key] = { type: 'sand', color: '#FDD835', hp: 20 };
+            else if (val < 0.6) world[key] = { type: 'grass', color: '#7CB342', hp: 10 };
+            else world[key] = { type: 'stone', color: '#9E9E9E', hp: 50 };
+            if (Math.random() < 0.015 && world[key].type === 'grass') {
+                world[key] = { type: 'tree', color: '#2E7D32', hp: 30 };
             }
-            if (Math.random() < 0.02 && world[key].type === 'grass') {
-                world[key] = { type: 'tree', color: '#2E7D32' };
+            if (Math.random() < 0.003 && world[key].type === 'stone') {
+                const ores = ['coal', 'iron', 'gold', 'diamond'];
+                const ore = ores[Math.floor(Math.random() * ores.length)];
+                const colors = { coal: '#424242', iron: '#BDBDBD', gold: '#FFD700', diamond: '#4FC3F7' };
+                world[key] = { type: ore, color: colors[ore], hp: 40 };
             }
         }
     }
 }
 
 // ============================================================
-//  РИСОВАНИЕ
+//  БЛОКИ
+// ============================================================
+const BLOCK_TYPES = {
+    dirt: { name: 'Земля', emoji: '🟫', color: '#8D6E63', hp: 10 },
+    plank: { name: 'Доски', emoji: '🪵', color: '#D7A86E', hp: 20 },
+    stone_block: { name: 'Камень', emoji: '🪨', color: '#9E9E9E', hp: 50 },
+    brick: { name: 'Кирпич', emoji: '🧱', color: '#C62828', hp: 70 },
+    wood: { name: 'Древесина', emoji: '🌲', color: '#5D4037', hp: 30 },
+};
+
+// ============================================================
+//  ИГРОК
+// ============================================================
+class Player {
+    constructor(data) {
+        this.id = data.id;
+        this.name = data.name;
+        this.password = data.password || '';
+        this.x = data.x || WORLD_SIZE/2 * BLOCK;
+        this.y = data.y || WORLD_SIZE/2 * BLOCK;
+        this.radius = 16;
+        this.speed = 3;
+        this.hp = data.hp || 100;
+        this.maxHp = 100;
+        this.lives = data.lives !== undefined ? data.lives : MAX_LIVES;
+        this.maxLives = MAX_LIVES;
+        this.angle = 0;
+        this.kills = data.kills || 0;
+        this.money = data.money || 0;
+        this.alive = true;
+        this.color = '#4FC3F7';
+        this.faction = data.faction || 'none';
+        this.factionRole = data.factionRole || '';
+        this.isAdmin = data.isAdmin || false;
+        this.isBanned = data.isBanned || false;
+        this.createdAt = data.createdAt || Date.now();
+    }
+    
+    get isLaw() { return this.faction === 'law'; }
+    get factionDisplay() {
+        if (this.faction === 'law') {
+            return `👮 ${this.factionRole || 'Сотрудник'} Закона`;
+        }
+        return '';
+    }
+    
+    draw(ctx) {
+        if (!this.alive) return;
+        const sx = this.x - camera.x;
+        const sy = this.y - camera.y;
+        if (sx < -50 || sx > W+50 || sy < -50 || sy > H+50) return;
+        
+        // Тень
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        ctx.beginPath();
+        ctx.arc(sx, sy, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = this.isLaw ? '#4fc3f7' : '#fff';
+        ctx.lineWidth = this.isLaw ? 3 : 2;
+        ctx.stroke();
+        
+        // Глаза
+        const ex = sx + Math.cos(this.angle) * 8;
+        const ey = sy + Math.sin(this.angle) * 8;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(ex - 5, ey - 4, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(ex + 5, ey - 4, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(ex - 4 + Math.cos(this.angle)*2, ey - 4 + Math.sin(this.angle)*2, 2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(ex + 6 + Math.cos(this.angle)*2, ey - 4 + Math.sin(this.angle)*2, 2, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Имя
+        ctx.fillStyle = this.isAdmin ? '#ff6b6b' : '#fff';
+        ctx.font = this.isAdmin ? 'bold 12px Arial' : '11px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 0;
+        let displayName = this.name;
+        if (this.isAdmin) displayName = '👑 ' + displayName;
+        ctx.fillText(displayName, sx, sy - 28);
+        
+        // Фракция (под именем)
+        if (this.isLaw) {
+            ctx.fillStyle = '#4fc3f7';
+            ctx.font = '9px Arial';
+            ctx.fillText(`👮 ${this.factionRole || 'Сотрудник'} Закона`, sx, sy - 38);
+        }
+        
+        // Жизни (над именем)
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = '10px Arial';
+        let livesStr = '';
+        for (let i = 0; i < this.lives; i++) livesStr += '❤️';
+        ctx.fillText(livesStr || '💀', sx, sy - 48);
+        
+        // HP
+        const hpW = 30;
+        const hpX = sx - hpW/2;
+        const hpY = sy - 20;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(hpX, hpY, hpW, 4);
+        ctx.fillStyle = this.hp/this.maxHp > 0.5 ? '#4CAF50' : this.hp/this.maxHp > 0.25 ? '#FF9800' : '#F44336';
+        ctx.fillRect(hpX, hpY, hpW * (this.hp/this.maxHp), 4);
+    }
+}
+
+// ============================================================
+//  ПУЛЯ
+// ============================================================
+class Bullet {
+    constructor(x, y, angle, ownerId, damage = 15) {
+        this.x = x; this.y = y; this.angle = angle;
+        this.speed = 400; this.radius = 6;
+        this.damage = damage; this.ownerId = ownerId;
+        this.alive = true; this.life = 0; this.maxLife = 1.5;
+    }
+    update(dt) {
+        this.x += Math.cos(this.angle) * this.speed * dt;
+        this.y += Math.sin(this.angle) * this.speed * dt;
+        this.life += dt;
+        if (this.life > this.maxLife || this.x < 0 || this.x > WORLD_SIZE*BLOCK || this.y < 0 || this.y > WORLD_SIZE*BLOCK) {
+            this.alive = false;
+        }
+    }
+    draw(ctx) {
+        const sx = this.x - camera.x;
+        const sy = this.y - camera.y;
+        if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) return;
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+        ctx.fillStyle = '#FFD700';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#FFF';
+        ctx.beginPath();
+        ctx.arc(sx - 2, sy - 2, 2, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+// ============================================================
+//  РАЗМЕР ОКНА
+// ============================================================
+function resizeCanvas() {
+    const container = document.getElementById('gameContainer');
+    W = container.clientWidth;
+    H = container.clientHeight;
+    canvas.width = W;
+    canvas.height = H;
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ============================================================
+//  РЕНДЕРИНГ
 // ============================================================
 function drawWorld() {
     const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -189,70 +631,498 @@ function drawWorld() {
                 ctx.beginPath();
                 ctx.arc(sx + 26, sy + 14, 10, 0, Math.PI*2);
                 ctx.fill();
+            } else if (block.type === 'water') {
+                ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                ctx.fillRect(sx + 4, sy + 4, 8, 8);
+                ctx.fillRect(sx + 20, sy + 18, 6, 6);
             }
+            ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(sx, sy, BLOCK, BLOCK);
         }
     }
 }
 
 // ============================================================
-//  ИГРОК
+//  ЛОГИКА
 // ============================================================
-class Player {
-    constructor(name) {
-        this.name = name;
-        this.x = WORLD_SIZE/2 * BLOCK;
-        this.y = WORLD_SIZE/2 * BLOCK;
-        this.radius = 16;
-        this.speed = 3;
-        this.hp = 100;
-        this.maxHp = 100;
-        this.angle = 0;
-        this.color = '#4FC3F7';
+function shoot() {
+    if (!player || !player.alive || mode !== 'combat') return;
+    const bullet = new Bullet(
+        player.x + Math.cos(player.angle) * 30,
+        player.y + Math.sin(player.angle) * 30,
+        player.angle, player.id
+    );
+    bullets.push(bullet);
+    showToast('🔫 ПУХ!');
+}
+
+function checkBulletHits() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        if (!b.alive) { bullets.splice(i, 1); continue; }
+        let hit = false;
+        for (const pid in players) {
+            const p = players[pid];
+            if (p.id === b.ownerId || !p.alive) continue;
+            const dx = b.x - p.x, dy = b.y - p.y;
+            if (Math.sqrt(dx*dx + dy*dy) < p.radius + b.radius) {
+                p.hp -= b.damage; hit = true;
+                if (p.hp <= 0) {
+                    p.hp = 0; p.alive = false;
+                    p.lives--;
+                    const killer = players[b.ownerId];
+                    if (killer) { killer.kills++; killer.money += 10; }
+                    showToast(`💀 ${p.name} убит! Осталось жизней: ${p.lives}`);
+                    
+                    // Проверка на бан
+                    if (p.lives <= 0) {
+                        p.isBanned = true;
+                        showToast(`⛔ ${p.name} забанен до конца сезона!`);
+                        addChatMessage('system', `⛔ ${p.name} потерял все жизни и забанен!`);
+                    } else {
+                        setTimeout(() => respawnPlayer(p), 3000);
+                    }
+                }
+                break;
+            }
+        }
+        if (hit) bullets.splice(i, 1);
+    }
+}
+
+function respawnPlayer(p) {
+    p.hp = p.maxHp;
+    p.alive = true;
+    p.x = Math.random() * 100 * BLOCK + 25 * BLOCK;
+    p.y = Math.random() * 100 * BLOCK + 25 * BLOCK;
+}
+
+function placeBlock() {
+    if (!player || mode !== 'build') return;
+    const wx = Math.floor(mouse.worldX / BLOCK);
+    const wy = Math.floor(mouse.worldY / BLOCK);
+    const key = `${wx},${wy}`;
+    for (const pid in players) {
+        const p = players[pid];
+        if (Math.abs(p.x - wx*BLOCK) < BLOCK && Math.abs(p.y - wy*BLOCK) < BLOCK) return;
+    }
+    const blockKeys = ['dirt', 'plank', 'stone_block', 'brick', 'wood'];
+    const selected = blockKeys[selectedSlot];
+    if (!selected) return;
+    if ((inventory[selected] || 0) < 1) { showToast('❌ Нет ресурсов!'); return; }
+    const blockInfo = BLOCK_TYPES[selected];
+    world[key] = { type: selected, color: blockInfo.color, hp: blockInfo.hp, owner: player.id };
+    inventory[selected]--;
+    showToast(`✅ Поставлен ${blockInfo.name}`);
+    updateInventoryUI();
+}
+
+function breakBlock() {
+    if (!player) return;
+    const wx = Math.floor(mouse.worldX / BLOCK);
+    const wy = Math.floor(mouse.worldY / BLOCK);
+    const key = `${wx},${wy}`;
+    if (!world[key] || world[key].type === 'water' || world[key].type === 'grass') return;
+    const block = world[key];
+    block.hp -= 15;
+    if (block.hp <= 0) {
+        const resourceMap = { tree:'wood', stone:'stone_block', coal:'coal', iron:'iron', gold:'gold', diamond:'diamond', dirt:'dirt', plank:'plank', brick:'brick', stone_block:'stone_block', wood:'wood' };
+        const res = resourceMap[block.type] || block.type;
+        if (res) { inventory[res] = (inventory[res] || 0) + 1; showToast(`⛏️ Добыт ${res}`); }
+        world[key] = { type: 'grass', color: '#7CB342', hp: 10 };
+        updateInventoryUI();
+    }
+}
+
+function updateInventoryUI() {
+    const container = document.getElementById('inventory');
+    container.innerHTML = '';
+    const blockKeys = ['dirt', 'plank', 'stone_block', 'brick', 'wood'];
+    blockKeys.forEach((key, i) => {
+        const div = document.createElement('div');
+        div.className = `slot ${i === selectedSlot ? 'active' : ''}`;
+        div.innerHTML = `<span>${BLOCK_TYPES[key].emoji}</span><span class="count">${inventory[key] || 0}</span>`;
+        div.onclick = () => { selectedSlot = i; updateInventoryUI(); };
+        container.appendChild(div);
+    });
+}
+
+// ============================================================
+//  ЧАТ
+// ============================================================
+function addChatMessage(type, text, name = '') {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'msg';
+    const time = new Date().toLocaleTimeString();
+    
+    if (type === 'system') {
+        div.innerHTML = `<span class="system">[${time}] ${text}</span>`;
+    } else if (type === 'admin') {
+        div.innerHTML = `<span class="time">[${time}]</span><span class="admin">👑 ${name}:</span> ${text}`;
+    } else if (type === 'law') {
+        div.innerHTML = `<span class="time">[${time}]</span><span class="law">👮 ${name}:</span> ${text}`;
+    } else {
+        const isLaw = players[name]?.isLaw;
+        const cls = isLaw ? 'law' : '';
+        div.innerHTML = `<span class="time">[${time}]</span><span class="name ${cls}">${name}:</span> ${text}`;
+    }
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    if (container.children.length > 100) container.removeChild(container.firstChild);
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chatInputField');
+    const text = input.value.trim();
+    if (!text || !player) return;
+    input.value = '';
+    
+    // Команды
+    if (text.startsWith('/')) {
+        handleCommand(text);
+        return;
     }
     
-    draw(ctx) {
-        const sx = this.x - camera.x;
-        const sy = this.y - camera.y;
-        
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
-        ctx.shadowBlur = 16;
-        ctx.shadowOffsetX = 3;
-        ctx.shadowOffsetY = 3;
-        ctx.beginPath();
-        ctx.arc(sx, sy, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        const ex = sx + Math.cos(this.angle) * 8;
-        const ey = sy + Math.sin(this.angle) * 8;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(ex - 5, ey - 4, 4, 0, Math.PI*2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(ex + 5, ey - 4, 4, 0, Math.PI*2);
-        ctx.fill();
-        ctx.fillStyle = '#1a1a2e';
-        ctx.beginPath();
-        ctx.arc(ex - 4 + Math.cos(this.angle)*2, ey - 4 + Math.sin(this.angle)*2, 2, 0, Math.PI*2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(ex + 6 + Math.cos(this.angle)*2, ey - 4 + Math.sin(this.angle)*2, 2, 0, Math.PI*2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#fff';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(this.name, sx, sy - 28);
+    // Обычное сообщение
+    addChatMessage('user', text, player.name);
+    // Сохраняем в БД (для истории)
+    try {
+        await queryTurso(
+            'INSERT INTO chat (player_name, message) VALUES (?, ?)',
+            [player.name, text]
+        );
+    } catch(e) {}
+}
+
+function toggleChat() {
+    chatMinimized = !chatMinimized;
+    document.getElementById('chatContainer').classList.toggle('minimized', chatMinimized);
+    document.getElementById('chatToggle').style.display = chatMinimized ? 'block' : 'none';
+    if (!chatMinimized) document.getElementById('chatInputField').focus();
+}
+
+// ============================================================
+//  КОМАНДЫ
+// ============================================================
+async function handleCommand(cmd) {
+    const parts = cmd.split(' ');
+    const command = parts[0].toLowerCase();
+    
+    if (!player.isAdmin && player.name !== ADMIN_NAME) {
+        addChatMessage('system', '⛔ У вас нет прав на использование команд');
+        return;
+    }
+    
+    switch(command) {
+        case '/kick':
+            if (parts.length < 2) { addChatMessage('system', '❌ /kick <ник>'); return; }
+            const kickName = parts[1];
+            for (const pid in players) {
+                if (players[pid].name === kickName) {
+                    players[pid].isBanned = true;
+                    addChatMessage('system', `⛔ ${kickName} исключён с сервера`);
+                    showToast(`⛔ ${kickName} исключён`);
+                    return;
+                }
+            }
+            addChatMessage('system', `❌ Игрок ${kickName} не найден`);
+            break;
+            
+        case '/ban':
+            if (parts.length < 2) { addChatMessage('system', '❌ /ban <ник>'); return; }
+            const banName = parts[1];
+            for (const pid in players) {
+                if (players[pid].name === banName) {
+                    players[pid].isBanned = true;
+                    players[pid].alive = false;
+                    addChatMessage('system', `⛔ ${banName} забанен до конца сезона!`);
+                    showToast(`⛔ ${banName} забанен`);
+                    return;
+                }
+            }
+            addChatMessage('system', `❌ Игрок ${banName} не найден`);
+            break;
+            
+        case '/give':
+            if (parts.length < 3) { addChatMessage('system', '❌ /give <ник> <ресурс>'); return; }
+            const giveName = parts[1];
+            const resource = parts[2];
+            for (const pid in players) {
+                if (players[pid].name === giveName) {
+                    inventory[resource] = (inventory[resource] || 0) + 10;
+                    addChatMessage('system', `✅ ${giveName} получил 10 ${resource}`);
+                    showToast(`✅ ${giveName} +10 ${resource}`);
+                    updateInventoryUI();
+                    return;
+                }
+            }
+            addChatMessage('system', `❌ Игрок ${giveName} не найден`);
+            break;
+            
+        case '/setfaction':
+            if (parts.length < 3) { addChatMessage('system', '❌ /setfaction <ник> <law|none>'); return; }
+            const fName = parts[1];
+            const faction = parts[2];
+            for (const pid in players) {
+                if (players[pid].name === fName) {
+                    players[pid].faction = faction;
+                    players[pid].factionRole = faction === 'law' ? 'Сотрудник' : '';
+                    addChatMessage('system', `✅ ${fName} назначен во фракцию ${faction}`);
+                    showToast(`✅ ${fName} теперь ${faction}`);
+                    return;
+                }
+            }
+            addChatMessage('system', `❌ Игрок ${fName} не найден`);
+            break;
+            
+        case '/setrole':
+            if (parts.length < 3) { addChatMessage('system', '❌ /setrole <ник> <роль>'); return; }
+            const rName = parts[1];
+            const role = parts.slice(2).join(' ');
+            for (const pid in players) {
+                if (players[pid].name === rName) {
+                    players[pid].factionRole = role;
+                    addChatMessage('system', `✅ ${rName} назначен на роль "${role}"`);
+                    showToast(`✅ ${rName} теперь "${role}"`);
+                    return;
+                }
+            }
+            addChatMessage('system', `❌ Игрок ${rName} не найден`);
+            break;
+            
+        case '/help':
+            addChatMessage('system', '📋 Команды: /kick, /ban, /give, /setfaction, /setrole, /clear, /season');
+            break;
+            
+        case '/clear':
+            document.getElementById('chatMessages').innerHTML = '';
+            addChatMessage('system', '🧹 Чат очищен');
+            break;
+            
+        case '/season':
+            const seasonInfo = seasonEnd ? `Осталось ${Math.ceil((seasonEnd - Date.now()) / (1000*60*60*24))} дней` : 'Не задан';
+            addChatMessage('system', `📅 Сезон: ${seasonInfo}`);
+            break;
+            
+        default:
+            addChatMessage('system', `❌ Неизвестная команда: ${command}`);
     }
 }
 
 // ============================================================
-//  ЦИКЛ
+//  СЕЗОН И ВАЙП
+// ============================================================
+async function checkSeason() {
+    const result = await queryTurso('SELECT value FROM settings WHERE key = "season_end"');
+    if (result && result.rows && result.rows.length > 0) {
+        seasonEnd = new Date(parseInt(result.rows[0][0]));
+    } else {
+        seasonEnd = new Date(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000);
+        await queryTurso('INSERT INTO settings (key, value) VALUES ("season_end", ?)', [seasonEnd.getTime()]);
+    }
+    
+    if (Date.now() > seasonEnd.getTime()) {
+        // ВАЙП
+        addChatMessage('system', '🔄 НАЧИНАЕТСЯ НОВЫЙ СЕЗОН! ВСЁ ОБНУЛЕНО!');
+        await queryTurso('DELETE FROM players');
+        await queryTurso('DELETE FROM inventory');
+        await queryTurso('DELETE FROM chat');
+        await queryTurso('UPDATE settings SET value = ? WHERE key = "season_end"', [Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000]);
+        seasonEnd = new Date(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000);
+        showToast('🔄 НОВЫЙ СЕЗОН! ВСЁ ОБНУЛЕНО!');
+        location.reload();
+    }
+}
+
+// ============================================================
+//  ЛОГИН
+// ============================================================
+async function login() {
+    const name = document.getElementById('nameInput').value.trim() || 'Player';
+    const password = document.getElementById('passwordInput').value.trim() || '123';
+    const errorEl = document.getElementById('loginError');
+    const loginBtn = document.querySelector('#loginOverlay button');
+    const dbStatus = document.getElementById('dbStatus');
+    
+    errorEl.style.display = 'none';
+    errorEl.textContent = '';
+    loginBtn.textContent = '⏳ Подключение...';
+    loginBtn.disabled = true;
+    dbStatus.textContent = '🔄 Подключение...';
+    dbStatus.style.color = '#ffd700';
+    
+    try {
+        // Проверка сезона
+        await checkSeason();
+        
+        // Проверка таблиц
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                password TEXT DEFAULT '',
+                x REAL DEFAULT 0,
+                y REAL DEFAULT 0,
+                hp REAL DEFAULT 100,
+                lives INTEGER DEFAULT ${MAX_LIVES},
+                kills INTEGER DEFAULT 0,
+                money INTEGER DEFAULT 0,
+                faction TEXT DEFAULT 'none',
+                factionRole TEXT DEFAULT '',
+                isAdmin INTEGER DEFAULT 0,
+                isBanned INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS inventory (
+                player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+                item TEXT NOT NULL,
+                count INTEGER DEFAULT 0,
+                PRIMARY KEY (player_id, item)
+            )
+        `);
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS chat (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_name TEXT,
+                message TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        `);
+        
+        // Проверяем игрока
+        let result = await queryTurso(
+            'SELECT id, name, password, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE name = ?',
+            [name]
+        );
+        
+        let isNew = false;
+        let playerData;
+        
+        if (result && result.rows && result.rows.length > 0) {
+            const row = result.rows[0];
+            if (row[2] && row[2] !== password && row[1] === ADMIN_NAME) {
+                throw new Error('Неверный пароль для администратора');
+            }
+            if (row[2] && row[2] !== password && row[1] !== ADMIN_NAME) {
+                // Для обычных игроков — обновляем пароль
+                await queryTurso('UPDATE players SET password = ? WHERE id = ?', [password, row[0]]);
+            }
+            playerData = {
+                id: row[0], name: row[1], password: row[2] || password,
+                x: row[3], y: row[4], hp: row[5], lives: row[6] || MAX_LIVES,
+                kills: row[7] || 0, money: row[8] || 0,
+                faction: row[9] || 'none', factionRole: row[10] || '',
+                isAdmin: row[11] === 1, isBanned: row[12] === 1
+            };
+        } else {
+            isNew = true;
+            const x = Math.random() * 100 * BLOCK + 25 * BLOCK;
+            const y = Math.random() * 100 * BLOCK + 25 * BLOCK;
+            const isAdmin = (name === ADMIN_NAME);
+            const insertResult = await queryTurso(
+                'INSERT INTO players (name, password, x, y, isAdmin) VALUES (?, ?, ?, ?, ?) RETURNING id',
+                [name, password, x, y, isAdmin ? 1 : 0]
+            );
+            if (!insertResult?.rows?.length) throw new Error('Не удалось создать игрока');
+            playerData = {
+                id: insertResult.rows[0][0], name, password,
+                x, y, hp: 100, lives: MAX_LIVES,
+                kills: 0, money: 0,
+                faction: 'none', factionRole: '',
+                isAdmin, isBanned: false
+            };
+        }
+        
+        // Проверка бана
+        if (playerData.isBanned) {
+            throw new Error('⛔ Вы забанены до конца сезона!');
+        }
+        
+        // Загружаем инвентарь
+        const invResult = await queryTurso('SELECT item, count FROM inventory WHERE player_id = ?', [playerData.id]);
+        if (invResult && invResult.rows) {
+            inventory = {};
+            invResult.rows.forEach(r => { inventory[r[0]] = r[1]; });
+        }
+        
+        // Создаём игрока
+        player = new Player(playerData);
+        playerId = playerData.id;
+        players[playerData.id] = player;
+        isLoggedIn = true;
+        
+        // Загружаем других игроков
+        await loadPlayers();
+        
+        // Загружаем историю чата
+        const chatResult = await queryTurso('SELECT player_name, message, created_at FROM chat ORDER BY id DESC LIMIT 20');
+        if (chatResult && chatResult.rows) {
+            chatResult.rows.reverse().forEach(row => {
+                addChatMessage('user', row[1], row[0]);
+            });
+        }
+        
+        document.getElementById('loginOverlay').classList.add('hidden');
+        document.getElementById('playerNameDisplay').textContent = player.name;
+        document.getElementById('factionDisplay').textContent = player.factionDisplay;
+        updateInventoryUI();
+        showToast(`🎉 Добро пожаловать, ${player.name}!`);
+        dbStatus.textContent = '✅ Игра запущена!';
+        dbStatus.style.color = '#4caf50';
+        
+        // Если админ — приветствие
+        if (player.isAdmin) {
+            addChatMessage('system', '👑 Вы вошли как администратор! /help для списка команд');
+        }
+        
+    } catch(e) {
+        console.error('❌ Ошибка:', e);
+        errorEl.textContent = `❌ ${e.message || 'Неизвестная ошибка'}`;
+        errorEl.style.display = 'block';
+        dbStatus.textContent = '❌ Ошибка подключения';
+        dbStatus.style.color = '#ff6b6b';
+    } finally {
+        loginBtn.textContent = '🎮 Войти';
+        loginBtn.disabled = false;
+    }
+}
+
+async function loadPlayers() {
+    if (!playerId) return;
+    try {
+        const result = await queryTurso(
+            'SELECT id, name, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE id != ? AND isBanned = 0',
+            [playerId]
+        );
+        if (result && result.rows) {
+            result.rows.forEach(row => {
+                if (!players[row[0]]) {
+                    const p = new Player({
+                        id: row[0], name: row[1], x: row[2], y: row[3],
+                        hp: row[4], lives: row[5] || MAX_LIVES, kills: row[6] || 0,
+                        money: row[7] || 0, faction: row[8] || 'none',
+                        factionRole: row[9] || '', isAdmin: row[10] === 1,
+                        isBanned: row[11] === 1
+                    });
+                    players[row[0]] = p;
+                }
+            });
+        }
+    } catch(e) { console.error('Ошибка загрузки игроков:', e); }
+}
+
+// ============================================================
+//  ИГРОВОЙ ЦИКЛ
 // ============================================================
 let lastTime = 0;
 
@@ -284,29 +1154,109 @@ function update(dt) {
     camera.y = player.y - H/2;
     camera.x = Math.max(0, Math.min(WORLD_SIZE * BLOCK - W, camera.x));
     camera.y = Math.max(0, Math.min(WORLD_SIZE * BLOCK - H, camera.y));
-    document.getElementById('coordsDisplay').textContent = `${Math.floor(player.x/BLOCK)}, ${Math.floor(player.y/BLOCK)}`;
+    
+    // Пули
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        bullets[i].update(dt);
+        if (!bullets[i].alive) bullets.splice(i, 1);
+    }
+    checkBulletHits();
+    
+    // HUD
+    document.getElementById('hpDisplay').textContent = player.lives;
+    document.getElementById('moneyDisplay').textContent = player.money;
+    document.getElementById('playersOnline').textContent = Object.keys(players).length + 1;
+    if (seasonEnd) {
+        const left = Math.ceil((seasonEnd - Date.now()) / (1000*60*60*24));
+        document.getElementById('timerDisplay').textContent = left > 0 ? `${left}д` : 'ВАЙП!';
+    }
 }
 
 function render() {
     ctx.clearRect(0, 0, W, H);
     drawWorld();
+    bullets.forEach(b => b.draw(ctx));
+    for (const pid in players) players[pid].draw(ctx);
     if (player) player.draw(ctx);
+    
+    // Прицел
+    if (mode === 'combat') {
+        ctx.strokeStyle = 'rgba(255,0,0,0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(mouse.x, mouse.y, 20, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    } else {
+        const wx = Math.floor(mouse.worldX / BLOCK) * BLOCK - camera.x;
+        const wy = Math.floor(mouse.worldY / BLOCK) * BLOCK - camera.y;
+        ctx.strokeStyle = 'rgba(255,215,0,0.4)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wx, wy, BLOCK, BLOCK);
+        ctx.fillStyle = 'rgba(255,215,0,0.04)';
+        ctx.fillRect(wx, wy, BLOCK, BLOCK);
+    }
 }
 
 // ============================================================
 //  ВВОД
 // ============================================================
-document.addEventListener('keydown', (e) => { keys[e.key] = true; });
+document.addEventListener('keydown', (e) => {
+    keys[e.key] = true;
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        mode = mode === 'combat' ? 'build' : 'combat';
+        document.getElementById('modeIndicator').textContent = mode === 'combat' ? '🔫 Боевой режим [TAB]' : '🏗️ Стройка [TAB]';
+        showToast(mode === 'combat' ? '🔫 Боевой режим' : '🏗️ Режим строительства');
+    }
+    if (e.key >= '1' && e.key <= '5') {
+        selectedSlot = parseInt(e.key) - 1;
+        updateInventoryUI();
+    }
+    if (e.key === 'Enter' && !document.getElementById('chatInputField').matches(':focus')) {
+        toggleChat();
+    }
+    if (e.key === 'Escape') {
+        document.getElementById('chatInputField').blur();
+    }
+});
 document.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    mouse.x = (e.clientX - rect.left) * scaleX;
+    mouse.y = (e.clientY - rect.top) * scaleY;
+    mouse.worldX = mouse.x + camera.x;
+    mouse.worldY = mouse.y + camera.y;
     if (player) {
         player.angle = Math.atan2(mouse.y - (player.y - camera.y), mouse.x - (player.x - camera.x));
     }
 });
+
+canvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (!player) return;
+    if (e.button === 0) breakBlock();
+    else if (e.button === 2) {
+        if (mode === 'combat') shoot();
+        else placeBlock();
+    }
+});
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ============================================================
+//  ПОЛНЫЙ ЭКРАН
+// ============================================================
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+    } else {
+        document.exitFullscreen();
+    }
+}
 
 // ============================================================
 //  ТОСТ
@@ -315,95 +1265,45 @@ function showToast(msg) {
     const el = document.getElementById('toast');
     el.textContent = msg;
     el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 2500);
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => el.classList.remove('show'), 2500);
 }
 
 // ============================================================
-//  ЛОГИН (ONLINE)
+//  СОХРАНЕНИЕ
 // ============================================================
-async function login() {
-    const name = document.getElementById('nameInput').value.trim() || 'Player';
-    const errorEl = document.getElementById('errorMsg');
-    const loginBtn = document.getElementById('loginBtn');
-    const dbStatus = document.getElementById('dbStatus');
-    
-    errorEl.style.display = 'none';
-    errorEl.textContent = '';
-    loginBtn.textContent = '⏳ Подключение...';
-    loginBtn.disabled = true;
-    dbStatus.textContent = '🔄 Подключение к Turso...';
-    dbStatus.style.color = '#ffd700';
-    
+setInterval(async () => {
+    if (!player || !playerId || !isLoggedIn) return;
     try {
-        // 1. ПРОВЕРЯЕМ ПОДКЛЮЧЕНИЕ
-        console.log('🔌 Проверка подключения к Turso...');
-        const testResult = await queryTurso('SELECT 1 as test');
-        console.log('✅ Turso отвечает:', testResult);
-        dbStatus.textContent = '✅ Turso подключена!';
-        dbStatus.style.color = '#4caf50';
-        
-        // 2. СОЗДАЁМ ТАБЛИЦУ
-        console.log('📦 Создание таблицы...');
-        const createSQL = `
-            CREATE TABLE IF NOT EXISTS players (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `;
-        await queryTurso(createSQL);
-        console.log('✅ Таблица создана/проверена');
-        
-        // 3. СОХРАНЯЕМ ИГРОКА
-        console.log(`💾 Сохранение игрока: ${name}`);
-        const insertSQL = `
-            INSERT INTO players (name) 
-            VALUES (?) 
-            ON CONFLICT(name) DO UPDATE SET name = excluded.name
-        `;
-        await queryTurso(insertSQL, [name]);
-        console.log(`✅ Игрок "${name}" сохранён!`);
-        dbStatus.textContent = `✅ Игрок "${name}" в БД!`;
-        
-        // 4. ПОЛУЧАЕМ СПИСОК ИГРОКОВ
-        const selectSQL = `SELECT id, name, created_at FROM players ORDER BY id DESC LIMIT 5`;
-        const result = await queryTurso(selectSQL);
-        if (result && result.rows) {
-            console.log('📋 Последние игроки:');
-            result.rows.forEach(row => {
-                console.log(`   - ${row[1]} (ID: ${row[0]})`);
-            });
+        await queryTurso(
+            'UPDATE players SET x = ?, y = ?, hp = ?, lives = ?, kills = ?, money = ?, faction = ?, factionRole = ? WHERE id = ?',
+            [player.x, player.y, Math.floor(player.hp), player.lives, player.kills, player.money, player.faction, player.factionRole, playerId]
+        );
+        for (const [item, count] of Object.entries(inventory)) {
+            if (count === 0) {
+                await queryTurso('DELETE FROM inventory WHERE player_id = ? AND item = ?', [playerId, item]);
+            } else {
+                await queryTurso(
+                    'INSERT INTO inventory (player_id, item, count) VALUES (?, ?, ?) ON CONFLICT(player_id, item) DO UPDATE SET count = ?',
+                    [playerId, item, count, count]
+                );
+            }
         }
-        
-        // 5. ВХОД В ИГРУ
-        player = new Player(name);
-        playerName = name;
-        document.getElementById('playerNameDisplay').textContent = name;
-        document.getElementById('loginOverlay').classList.add('hidden');
-        showToast(`🎉 Добро пожаловать, ${name}!`);
-        
-    } catch(e) {
-        console.error('❌ Ошибка:', e);
-        errorEl.textContent = `❌ ${e.message || 'Неизвестная ошибка'}`;
-        errorEl.style.display = 'block';
-        dbStatus.textContent = '❌ Ошибка подключения к Turso';
-        dbStatus.style.color = '#ff6b6b';
-    } finally {
-        loginBtn.textContent = '🎮 Войти';
-        loginBtn.disabled = false;
-    }
-}
+    } catch(e) { console.error('Ошибка сохранения:', e); }
+}, 15000);
 
 // ============================================================
 //  ЗАПУСК
 // ============================================================
+resizeCanvas();
 initWorld();
 gameLoop(0);
+setInterval(loadPlayers, 5000);
 
 console.log('🏕️ LuSMP загружена!');
-console.log('🌐 Turso URL:', TURSO_URL);
+console.log('👑 Админ: pharaon (пароль: admin123)');
 
-// Проверяем подключение при старте
+// Проверка подключения
 document.getElementById('dbStatus').textContent = '🔄 Проверка Turso...';
 queryTurso('SELECT 1 as test')
     .then(() => {
@@ -411,9 +1311,14 @@ queryTurso('SELECT 1 as test')
         document.getElementById('dbStatus').style.color = '#4caf50';
     })
     .catch(() => {
-        document.getElementById('dbStatus').textContent = '⚠️ Turso недоступна (игра локальная)';
+        document.getElementById('dbStatus').textContent = '⚠️ Turso недоступна';
         document.getElementById('dbStatus').style.color = '#ff9800';
     });
+
+// Автоматическое открытие чата по клику
+document.getElementById('chatContainer').addEventListener('click', () => {
+    if (chatMinimized) toggleChat();
+});
 </script>
 </body>
 </html>
