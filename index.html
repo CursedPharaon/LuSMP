@@ -676,162 +676,166 @@
     // ============================================================
     //  ЛОГИН (ГЛАВНОЕ — ПРОВЕРКА ПАРОЛЯ)
     // ============================================================
-    async function login() {
-        const name = document.getElementById('nameInput').value.trim();
-        const password = document.getElementById('passwordInput').value.trim();
-        const errorEl = document.getElementById('loginError');
-        const loginBtn = document.querySelector('#loginOverlay button');
-        const dbStatus = document.getElementById('dbStatus');
+    // ============================================================
+//  ЛОГИН (ТОЛЬКО ПРОВЕРКА ПАРОЛЯ)
+// ============================================================
+async function login() {
+    const name = document.getElementById('nameInput').value.trim();
+    const password = document.getElementById('passwordInput').value.trim();
+    const errorEl = document.getElementById('loginError');
+    const loginBtn = document.querySelector('#loginOverlay button');
+    const dbStatus = document.getElementById('dbStatus');
 
-        errorEl.style.display = 'none';
-        errorEl.textContent = '';
-        loginBtn.textContent = '⏳ Подключение...';
-        loginBtn.disabled = true;
-        dbStatus.textContent = '🔄 Подключение...';
-        dbStatus.style.color = '#ffd700';
+    errorEl.style.display = 'none';
+    errorEl.textContent = '';
+    loginBtn.textContent = '⏳ Подключение...';
+    loginBtn.disabled = true;
+    dbStatus.textContent = '🔄 Подключение...';
+    dbStatus.style.color = '#ffd700';
 
-        try {
-            // 1. СОЗДАЁМ ТАБЛИЦЫ (ЕСЛИ ИХ НЕТ)
-            await queryTurso(`
-                CREATE TABLE IF NOT EXISTS players (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL,
-                    password TEXT DEFAULT '',
-                    x TEXT DEFAULT '0',
-                    y TEXT DEFAULT '0',
-                    hp TEXT DEFAULT '100',
-                    lives TEXT DEFAULT '${MAX_LIVES}',
-                    kills TEXT DEFAULT '0',
-                    money TEXT DEFAULT '0',
-                    faction TEXT DEFAULT 'none',
-                    factionRole TEXT DEFAULT '',
-                    isAdmin TEXT DEFAULT '0',
-                    isBanned TEXT DEFAULT '0',
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-            await queryTurso(`
-                CREATE TABLE IF NOT EXISTS inventory (
-                    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-                    item TEXT NOT NULL,
-                    count TEXT DEFAULT '0',
-                    PRIMARY KEY (player_id, item)
-                )
-            `);
-            await queryTurso(`
-                CREATE TABLE IF NOT EXISTS chat (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    player_name TEXT,
-                    message TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
+    try {
+        // 1. СОЗДАЁМ ТАБЛИЦЫ (ЕСЛИ ИХ НЕТ)
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                password TEXT DEFAULT '',
+                x TEXT DEFAULT '0',
+                y TEXT DEFAULT '0',
+                hp TEXT DEFAULT '100',
+                lives TEXT DEFAULT '${MAX_LIVES}',
+                kills TEXT DEFAULT '0',
+                money TEXT DEFAULT '0',
+                faction TEXT DEFAULT 'none',
+                factionRole TEXT DEFAULT '',
+                isAdmin TEXT DEFAULT '0',
+                isBanned TEXT DEFAULT '0',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS inventory (
+                player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+                item TEXT NOT NULL,
+                count TEXT DEFAULT '0',
+                PRIMARY KEY (player_id, item)
+            )
+        `);
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS chat (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_name TEXT,
+                message TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-            // 2. ИЩЕМ ИГРОКА В БД
-            const safeName = name.replace(/'/g, "''");
-            let result = await queryTurso(`SELECT id, name, password, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE name = '${safeName}'`);
+        // 2. ИЩЕМ ИГРОКА В БД
+        const safeName = name.replace(/'/g, "''");
+        let result = await queryTurso(`SELECT id, name, password, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE name = '${safeName}'`);
 
-            let playerData;
+        let playerData;
 
-            if (result && result.rows && result.rows.length > 0) {
-                const row = result.rows[0];
-                // === ГЛАВНАЯ ПРОВЕРКА ===
-                if (row[2] && row[2] !== password) {
-                    throw new Error('❌ Неверный пароль! Попробуй ещё раз.');
-                }
-                playerData = {
-                    id: row[0],
-                    name: row[1],
-                    password: row[2] || password,
-                    x: parseFloat(row[3]) || 0,
-                    y: parseFloat(row[4]) || 0,
-                    hp: parseFloat(row[5]) || 100,
-                    lives: parseInt(row[6]) || MAX_LIVES,
-                    kills: parseInt(row[7]) || 0,
-                    money: parseInt(row[8]) || 0,
-                    faction: row[9] || 'none',
-                    factionRole: row[10] || '',
-                    isAdmin: row[11] === '1',
-                    isBanned: row[12] === '1'
-                };
-            } else {
-                // 3. ЕСЛИ ИГРОКА НЕТ — СОЗДАЁМ НОВОГО
-                const x = Math.random() * 100 * BLOCK + 25 * BLOCK;
-                const y = Math.random() * 100 * BLOCK + 25 * BLOCK;
-                const isAdmin = (name === ADMIN_NAME);
-                const insertResult = await queryTurso(
-                    `INSERT INTO players (name, password, x, y, isAdmin) VALUES ('${safeName}', '${password.replace(/'/g, "''")}', '${x}', '${y}', '${isAdmin ? 1 : 0}') RETURNING id`
-                );
-                if (!insertResult?.rows?.length) throw new Error('Не удалось создать игрока');
-                playerData = {
-                    id: insertResult.rows[0][0],
-                    name,
-                    password,
-                    x,
-                    y,
-                    hp: 100,
-                    lives: MAX_LIVES,
-                    kills: 0,
-                    money: 0,
-                    faction: 'none',
-                    factionRole: '',
-                    isAdmin,
-                    isBanned: false
-                };
+        if (result && result.rows && result.rows.length > 0) {
+            const row = result.rows[0];
+            // === ГЛАВНАЯ ПРОВЕРКА: пароль из формы === пароль из БД ===
+            const dbPassword = row[2] || '';
+            if (dbPassword !== password) {
+                throw new Error('❌ Неверный пароль!');
             }
-
-            // 4. ПРОВЕРКА НА БАН
-            if (playerData.isBanned) {
-                throw new Error('⛔ Вы забанены до конца сезона!');
-            }
-
-            // 5. ЗАГРУЖАЕМ ИНВЕНТАРЬ
-            const invResult = await queryTurso(`SELECT item, count FROM inventory WHERE player_id = '${playerData.id}'`);
-            if (invResult && invResult.rows) {
-                inventory = {};
-                invResult.rows.forEach(r => { inventory[r[0]] = parseInt(r[1]) || 0; });
-            }
-
-            // 6. СОЗДАЁМ ОБЪЕКТ ИГРОКА
-            player = new Player(playerData);
-            playerId = playerData.id;
-            players[playerData.id] = player;
-            isLoggedIn = true;
-
-            await loadPlayers();
-
-            // 7. ЗАГРУЖАЕМ ИСТОРИЮ ЧАТА
-            const chatResult = await queryTurso('SELECT player_name, message, created_at FROM chat ORDER BY id DESC LIMIT 20');
-            if (chatResult && chatResult.rows) {
-                chatResult.rows.reverse().forEach(row => {
-                    addChatMessage('user', row[1], row[0]);
-                });
-            }
-
-            // 8. ЗАПУСКАЕМ ИГРУ
-            document.getElementById('loginOverlay').classList.add('hidden');
-            document.getElementById('playerNameDisplay').textContent = player.name;
-            document.getElementById('factionDisplay').textContent = player.factionDisplay;
-            updateInventoryUI();
-            showToast(`🎉 Добро пожаловать, ${player.name}!`);
-            dbStatus.textContent = '✅ Игра запущена!';
-            dbStatus.style.color = '#4caf50';
-
-            if (player.isAdmin) {
-                addChatMessage('system', '👑 Вы вошли как администратор! /help для списка команд');
-            }
-
-        } catch (e) {
-            console.error('❌ Ошибка:', e);
-            errorEl.textContent = `❌ ${e.message || 'Неизвестная ошибка'}`;
-            errorEl.style.display = 'block';
-            dbStatus.textContent = '❌ Ошибка подключения';
-            dbStatus.style.color = '#ff6b6b';
-        } finally {
-            loginBtn.textContent = '🎮 Войти';
-            loginBtn.disabled = false;
+            playerData = {
+                id: row[0],
+                name: row[1],
+                password: dbPassword,
+                x: parseFloat(row[3]) || 0,
+                y: parseFloat(row[4]) || 0,
+                hp: parseFloat(row[5]) || 100,
+                lives: parseInt(row[6]) || MAX_LIVES,
+                kills: parseInt(row[7]) || 0,
+                money: parseInt(row[8]) || 0,
+                faction: row[9] || 'none',
+                factionRole: row[10] || '',
+                isAdmin: row[11] === '1',
+                isBanned: row[12] === '1'
+            };
+        } else {
+            // 3. ЕСЛИ ИГРОКА НЕТ — СОЗДАЁМ НОВОГО
+            const x = Math.random() * 100 * BLOCK + 25 * BLOCK;
+            const y = Math.random() * 100 * BLOCK + 25 * BLOCK;
+            const isAdmin = (name === ADMIN_NAME);
+            const insertResult = await queryTurso(
+                `INSERT INTO players (name, password, x, y, isAdmin) VALUES ('${safeName}', '${password.replace(/'/g, "''")}', '${x}', '${y}', '${isAdmin ? 1 : 0}') RETURNING id`
+            );
+            if (!insertResult?.rows?.length) throw new Error('Не удалось создать игрока');
+            playerData = {
+                id: insertResult.rows[0][0],
+                name,
+                password,
+                x,
+                y,
+                hp: 100,
+                lives: MAX_LIVES,
+                kills: 0,
+                money: 0,
+                faction: 'none',
+                factionRole: '',
+                isAdmin,
+                isBanned: false
+            };
         }
+
+        // 4. ПРОВЕРКА НА БАН
+        if (playerData.isBanned) {
+            throw new Error('⛔ Вы забанены до конца сезона!');
+        }
+
+        // 5. ЗАГРУЖАЕМ ИНВЕНТАРЬ
+        const invResult = await queryTurso(`SELECT item, count FROM inventory WHERE player_id = '${playerData.id}'`);
+        if (invResult && invResult.rows) {
+            inventory = {};
+            invResult.rows.forEach(r => { inventory[r[0]] = parseInt(r[1]) || 0; });
+        }
+
+        // 6. СОЗДАЁМ ОБЪЕКТ ИГРОКА
+        player = new Player(playerData);
+        playerId = playerData.id;
+        players[playerData.id] = player;
+        isLoggedIn = true;
+
+        await loadPlayers();
+
+        // 7. ЗАГРУЖАЕМ ИСТОРИЮ ЧАТА
+        const chatResult = await queryTurso('SELECT player_name, message, created_at FROM chat ORDER BY id DESC LIMIT 20');
+        if (chatResult && chatResult.rows) {
+            chatResult.rows.reverse().forEach(row => {
+                addChatMessage('user', row[1], row[0]);
+            });
+        }
+
+        // 8. ЗАПУСКАЕМ ИГРУ
+        document.getElementById('loginOverlay').classList.add('hidden');
+        document.getElementById('playerNameDisplay').textContent = player.name;
+        document.getElementById('factionDisplay').textContent = player.factionDisplay;
+        updateInventoryUI();
+        showToast(`🎉 Добро пожаловать, ${player.name}!`);
+        dbStatus.textContent = '✅ Игра запущена!';
+        dbStatus.style.color = '#4caf50';
+
+        if (player.isAdmin) {
+            addChatMessage('system', '👑 Вы вошли как администратор! /help для списка команд');
+        }
+
+    } catch (e) {
+        console.error('❌ Ошибка:', e);
+        errorEl.textContent = `❌ ${e.message || 'Неизвестная ошибка'}`;
+        errorEl.style.display = 'block';
+        dbStatus.textContent = '❌ Ошибка подключения';
+        dbStatus.style.color = '#ff6b6b';
+    } finally {
+        loginBtn.textContent = '🎮 Войти';
+        loginBtn.disabled = false;
     }
+}
 
     async function loadPlayers() {
         if (!playerId) return;
