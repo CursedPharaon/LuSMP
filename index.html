@@ -97,25 +97,34 @@ let toastTimeout;
 // ============================================================
 async function queryTurso(sql, params = []) {
     try {
+        // Строим запрос в правильном формате для Turso
+        const body = {
+            requests: [{
+                type: "execute",
+                stmt: {
+                    sql: sql
+                }
+            }]
+        };
+        
+        // Добавляем аргументы, если они есть (просто массив значений)
+        if (params.length > 0) {
+            body.requests[0].stmt.args = params;
+        }
+        
+        console.log('📤 Запрос:', JSON.stringify(body, null, 2));
+        
         const resp = await fetch(`${TURSO_URL}/v2/pipeline`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${TURSO_TOKEN}`
             },
-            body: JSON.stringify({
-                requests: [{
-                    type: "execute",
-                    stmt: {
-                        sql: sql,
-                        args: params.map(p => ({ type: getTursoType(p), value: p }))
-                    }
-                }]
-            })
+            body: JSON.stringify(body)
         });
         
         const data = await resp.json();
-        console.log('Turso ответ:', data);
+        console.log('📥 Ответ:', data);
         
         if (!resp.ok) {
             throw new Error(`HTTP ${resp.status}: ${JSON.stringify(data)}`);
@@ -132,18 +141,9 @@ async function queryTurso(sql, params = []) {
         }
         return null;
     } catch(e) {
-        console.error('Ошибка Turso:', e);
+        console.error('❌ Ошибка Turso:', e);
         throw e;
     }
-}
-
-function getTursoType(value) {
-    if (typeof value === 'number') {
-        if (Number.isInteger(value)) return 'integer';
-        return 'float';
-    }
-    if (typeof value === 'boolean') return 'boolean';
-    return 'text';
 }
 
 // ============================================================
@@ -604,15 +604,35 @@ async function login() {
     loginBtn.textContent = '⏳ Подключение...';
     
     try {
-        // Проверяем подключение к Turso
-        console.log('🔌 Проверка подключения к Turso...');
-        const testResult = await queryTurso('SELECT 1 as test');
-        console.log('Тест подключения:', testResult);
+        // Сначала создаем таблицы (если их нет)
+        console.log('📦 Проверка/создание таблиц...');
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                symbol TEXT DEFAULT '😈',
+                x REAL DEFAULT 0,
+                y REAL DEFAULT 0,
+                hp REAL DEFAULT 100,
+                kills INTEGER DEFAULT 0,
+                money INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await queryTurso(`
+            CREATE TABLE IF NOT EXISTS inventory (
+                player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+                item TEXT NOT NULL,
+                count INTEGER DEFAULT 0,
+                PRIMARY KEY (player_id, item)
+            )
+        `);
+        console.log('✅ Таблицы готовы');
         
-        // Пробуем найти игрока
+        // Ищем игрока
         console.log('🔍 Поиск игрока:', name);
         let result = await queryTurso('SELECT id, name, symbol, x, y, hp, kills, money FROM players WHERE name = ?', [name]);
-        console.log('Результат поиска:', result);
+        console.log('Результат:', result);
         
         if (result && result.rows && result.rows.length > 0) {
             const row = result.rows[0];
@@ -690,7 +710,7 @@ async function loadPlayers() {
 }
 
 // ============================================================
-//  СОХРАНЕНИЕ
+//  СОХРАНЕНИЕ (каждые 15 секунд)
 // ============================================================
 setInterval(async () => {
     if (!player || !playerId || !isLoggedIn) return;
@@ -721,7 +741,6 @@ gameLoop(0);
 setInterval(loadPlayers, 5000);
 
 console.log('🏕️ LuSMP загружена!');
-console.log('🔑 Токен:', TURSO_TOKEN.substring(0, 20) + '...');
 console.log('🌐 URL:', TURSO_URL);
 </script>
 </body>
