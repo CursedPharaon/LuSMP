@@ -23,6 +23,7 @@
         #errorMsg { color: #ff6b6b; font-size: 14px; margin-top: 10px; display: none; max-width: 400px; text-align: center; }
         #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 10px 24px; border-radius: 10px; font-size: 14px; border-left: 4px solid #ffd700; opacity: 0; transition: 0.3s; z-index: 999; }
         #toast.show { opacity: 1; }
+        .db-status { font-size: 11px; color: #666; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -44,6 +45,7 @@
         </div>
         <button id="loginBtn" onclick="login()">🎮 Войти</button>
         <div id="errorMsg"></div>
+        <div class="db-status" id="dbStatus">🔄 Проверка подключения...</div>
     </div>
     
     <div id="toast">Сообщение</div>
@@ -73,17 +75,29 @@ let mouse = { x: 0, y: 0 };
 let playerName = 'Гость';
 
 // ============================================================
-//  ЗАПРОС К TURSO (БЕЗ ПАРАМЕТРОВ)
+//  ЗАПРОС К TURSO (ЕДИНСТВЕННЫЙ ПРАВИЛЬНЫЙ ФОРМАТ)
 // ============================================================
-async function queryTurso(sql) {
-    const body = {
-        requests: [{
-            type: "execute",
-            stmt: { sql: sql }
-        }]
+async function queryTurso(sql, params = []) {
+    // Формируем запрос в правильном формате для Turso
+    const requestBody = {
+        requests: [
+            {
+                type: "execute",
+                stmt: {
+                    sql: sql,
+                    args: params.map(p => {
+                        if (typeof p === 'string') return { type: 'text', value: p };
+                        if (typeof p === 'number') return { type: 'integer', value: p };
+                        if (typeof p === 'boolean') return { type: 'boolean', value: p };
+                        return { type: 'null', value: null };
+                    })
+                }
+            }
+        ]
     };
     
     console.log('📤 SQL:', sql);
+    console.log('📤 Params:', params);
     
     const resp = await fetch(`${TURSO_URL}/v2/pipeline`, {
         method: 'POST',
@@ -91,27 +105,25 @@ async function queryTurso(sql) {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${TURSO_TOKEN}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(requestBody)
     });
     
     const data = await resp.json();
-    console.log('📥 Ответ:', data);
+    console.log('📥 Ответ:', JSON.stringify(data, null, 2));
     
     if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}: ${JSON.stringify(data)}`);
+        throw new Error(`HTTP ${resp.status}: ${data.error || JSON.stringify(data)}`);
     }
     
-    if (data.results && data.results[0] && data.results[0].response && data.results[0].response.result) {
-        return data.results[0].response.result;
+    if (data.results && data.results[0] && data.results[0].response) {
+        if (data.results[0].response.error) {
+            throw new Error(data.results[0].response.error);
+        }
+        if (data.results[0].response.result) {
+            return data.results[0].response.result;
+        }
     }
     return null;
-}
-
-// ============================================================
-//  ЭКРАНИРОВАНИЕ СТРОКИ ДЛЯ SQL
-// ============================================================
-function escapeSQL(str) {
-    return str.replace(/'/g, "''");
 }
 
 // ============================================================
@@ -307,55 +319,63 @@ function showToast(msg) {
 }
 
 // ============================================================
-//  ЛОГИН (СОХРАНЕНИЕ В БД)
+//  ЛОГИН (ONLINE)
 // ============================================================
 async function login() {
     const name = document.getElementById('nameInput').value.trim() || 'Player';
     const errorEl = document.getElementById('errorMsg');
     const loginBtn = document.getElementById('loginBtn');
+    const dbStatus = document.getElementById('dbStatus');
     
     errorEl.style.display = 'none';
     errorEl.textContent = '';
     loginBtn.textContent = '⏳ Подключение...';
     loginBtn.disabled = true;
+    dbStatus.textContent = '🔄 Подключение к Turso...';
+    dbStatus.style.color = '#ffd700';
     
     try {
-        console.log('🔌 Подключение к Turso...');
+        // 1. ПРОВЕРЯЕМ ПОДКЛЮЧЕНИЕ
+        console.log('🔌 Проверка подключения к Turso...');
+        const testResult = await queryTurso('SELECT 1 as test');
+        console.log('✅ Turso отвечает:', testResult);
+        dbStatus.textContent = '✅ Turso подключена!';
+        dbStatus.style.color = '#4caf50';
         
-        // Экранируем имя для SQL
-        const safeName = escapeSQL(name);
-        
-        // 1. СОЗДАЁМ ТАБЛИЦУ (если её нет)
-        const createTableSQL = `
+        // 2. СОЗДАЁМ ТАБЛИЦУ
+        console.log('📦 Создание таблицы...');
+        const createSQL = `
             CREATE TABLE IF NOT EXISTS players (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `;
-        await queryTurso(createTableSQL);
+        await queryTurso(createSQL);
         console.log('✅ Таблица создана/проверена');
         
-        // 2. СОХРАНЯЕМ ИГРОКА
+        // 3. СОХРАНЯЕМ ИГРОКА
+        console.log(`💾 Сохранение игрока: ${name}`);
         const insertSQL = `
             INSERT INTO players (name) 
-            VALUES ('${safeName}') 
+            VALUES (?) 
             ON CONFLICT(name) DO UPDATE SET name = excluded.name
         `;
-        await queryTurso(insertSQL);
-        console.log(`✅ Игрок "${name}" сохранён в БД!`);
+        await queryTurso(insertSQL, [name]);
+        console.log(`✅ Игрок "${name}" сохранён!`);
+        dbStatus.textContent = `✅ Игрок "${name}" в БД!`;
         
-        // 3. ПОКАЗЫВАЕМ ВСЕХ ИГРОКОВ (для проверки)
-        const selectSQL = `SELECT id, name, created_at FROM players ORDER BY id DESC LIMIT 10`;
+        // 4. ПОЛУЧАЕМ СПИСОК ИГРОКОВ
+        const selectSQL = `SELECT id, name, created_at FROM players ORDER BY id DESC LIMIT 5`;
         const result = await queryTurso(selectSQL);
-        console.log('📋 Игроки в БД:');
         if (result && result.rows) {
+            console.log('📋 Последние игроки:');
             result.rows.forEach(row => {
-                console.log(`   - ${row[1]} (ID: ${row[0]}, зарегистрирован: ${row[2]})`);
+                console.log(`   - ${row[1]} (ID: ${row[0]})`);
             });
         }
         
-        // 4. ВХОД В ИГРУ
+        // 5. ВХОД В ИГРУ
         player = new Player(name);
         playerName = name;
         document.getElementById('playerNameDisplay').textContent = name;
@@ -364,8 +384,10 @@ async function login() {
         
     } catch(e) {
         console.error('❌ Ошибка:', e);
-        errorEl.textContent = `❌ Ошибка: ${e.message || 'Неизвестная ошибка'}`;
+        errorEl.textContent = `❌ ${e.message || 'Неизвестная ошибка'}`;
         errorEl.style.display = 'block';
+        dbStatus.textContent = '❌ Ошибка подключения к Turso';
+        dbStatus.style.color = '#ff6b6b';
     } finally {
         loginBtn.textContent = '🎮 Войти';
         loginBtn.disabled = false;
@@ -380,6 +402,18 @@ gameLoop(0);
 
 console.log('🏕️ LuSMP загружена!');
 console.log('🌐 Turso URL:', TURSO_URL);
+
+// Проверяем подключение при старте
+document.getElementById('dbStatus').textContent = '🔄 Проверка Turso...';
+queryTurso('SELECT 1 as test')
+    .then(() => {
+        document.getElementById('dbStatus').textContent = '✅ Turso онлайн!';
+        document.getElementById('dbStatus').style.color = '#4caf50';
+    })
+    .catch(() => {
+        document.getElementById('dbStatus').textContent = '⚠️ Turso недоступна (игра локальная)';
+        document.getElementById('dbStatus').style.color = '#ff9800';
+    });
 </script>
 </body>
 </html>
