@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuSMP - 2D песочница</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body { 
+            background: #0a0a0f; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh;
+            font-family: 'Segoe UI', sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            border: 3px solid #2a2a3a;
+            border-radius: 12px;
+            box-shadow: 0 0 60px rgba(247, 151, 30, 0.1);
+        }
+        canvas {
+            display: block;
+            background: #1a237e;
+            border-radius: 10px;
+            cursor: crosshair;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .hud {
+            background: rgba(0,0,0,0.7);
+            padding: 8px 14px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .hud span { color: #ffd700; font-weight: bold; }
+        #inventory {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 8px 12px;
+            border-radius: 12px;
+            display: flex;
+            gap: 6px;
+            border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(8px);
+            pointer-events: auto;
+        }
+        .slot {
+            width: 48px;
+            height: 48px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 8px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #fff;
+            transition: 0.15s;
+            position: relative;
+        }
+        .slot.active {
+            border-color: #ffd700;
+            background: rgba(255,215,0,0.15);
+            box-shadow: 0 0 20px rgba(255,215,0,0.15);
+        }
+        .slot .count {
+            font-size: 10px;
+            color: #aaa;
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+        }
+        .slot .label {
+            font-size: 8px;
+            color: #888;
+            position: absolute;
+            bottom: 2px;
+            left: 4px;
+        }
+        #modeIndicator {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 14px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none;
+            transition: 0.3s;
+        }
+        #toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            border-left: 4px solid #ffd700;
+            pointer-events: none;
+            opacity: 0;
+            transition: 0.3s;
+            z-index: 999;
+        }
+        #toast.show { opacity: 1; }
+        #loginOverlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+        #loginOverlay h1 {
+            color: #ffd700;
+            font-size: 36px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 40px rgba(255,215,0,0.2);
+        }
+        #loginOverlay p { color: #888; margin-bottom: 20px; }
+        #loginOverlay input {
+            background: #1e1e2e;
+            border: 1px solid #2a2a3a;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin: 4px;
+            width: 200px;
+            font-size: 14px;
+        }
+        #loginOverlay button {
+            background: #ffd700;
+            color: #000;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 16px;
+            transition: 0.2s;
+        }
+        #loginOverlay button:hover { transform: scale(1.05); opacity: 0.9; }
+        .login-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="game" width="1000" height="650"></canvas>
+    
+    <!-- HUD -->
+    <div id="ui">
+        <div class="hud">❤️ <span id="hpDisplay">100</span> | 💰 <span id="moneyDisplay">0</span></div>
+        <div class="hud">🏆 <span id="killsDisplay">0</span> | 👥 <span id="playersOnline">1</span></div>
+        <div class="hud" id="coordsDisplay">📍 0, 0</div>
+    </div>
+    
+    <div id="modeIndicator">🔫 Боевой режим [TAB]</div>
+    
+    <!-- Инвентарь -->
+    <div id="inventory"></div>
+    
+    <!-- Логин -->
+    <div id="loginOverlay">
+        <h1>🏕️ LuSMP</h1>
+        <p>2D песочница с PvP и строительством</p>
+        <div class="login-row">
+            <input type="text" id="nameInput" placeholder="Имя игрока" value="Player">
+            <input type="text" id="symbolInput" placeholder="Символ 😈" value="😈" style="width:80px;">
+        </div>
+        <button onclick="login()">🎮 Войти в игру</button>
+        <div style="margin-top:12px;font-size:11px;color:#555;">WASD — движение | ЛКМ — ломать | ПКМ — строить/стрелять | TAB — режим</div>
+    </div>
+    
+    <div id="toast">Сообщение</div>
+</div>
+
+<script>
+// ============================================================
+//  ТУРСО КОНФИГ
+// ============================================================
+const TURSO_URL = 'https://lusmp-cursedd.aws-eu-west-1.turso.io';
+const TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODQzOTE0OTAsImlkIjoiMDE5Zjc2MDUtMDcwMS03NTU4LThhNmUtZTI0YjJmMTdkZGYwIiwia2lkIjoicWpYbEhLbElGQmJNX29uRDlaWEkyWFVfazVBT3h3X3JIMF9TcUZ6MmU0ZyIsInJpZCI6ImM5ZjMzZTMxLWFkNTgtNDRiNC04MGE1LWIyMWY1NzE0ZGFhZSJ9.YdQIKsgs-KPS5tFQDKTYx54KQ7EKjh3P8FA3_bl_LcXy51lq4JpSFMGIipi3wI3h8Dp_DZTVjw7AMEMpolLRCQ';
+
+// ============================================================
+//  СОСТОЯНИЕ
+// ============================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = 1000, H = 650;
+const BLOCK = 32;
+const WORLD_SIZE = 200;
+
+let player = null;
+let players = {};
+let world = {};
+let bullets = [];
+let inventory = {};
+let selectedSlot = 0;
+let mode = 'combat'; // 'combat' | 'build'
+let camera = { x: 0, y: 0 };
+let keys = {};
+let mouse = { x: 0, y: 0, worldX: 0, worldY: 0 };
+
+// ============================================================
+//  ИНИЦИАЛИЗАЦИЯ МИРА
+// ============================================================
+function initWorld() {
+    for (let x = 0; x < WORLD_SIZE; x++) {
+        for (let y = 0; y < WORLD_SIZE; y++) {
+            const key = `${x},${y}`;
+            // Простой шум
+            const val = Math.sin(x * 0.05) * Math.cos(y * 0.05) + Math.sin(x * 0.1 + y * 0.07) * 0.5;
+            if (val < -0.3) {
+                world[key] = { type: 'water', color: '#4FC3F7', hp: 999 };
+            } else if (val < 0.1) {
+                world[key] = { type: 'sand', color: '#FDD835', hp: 20 };
+            } else if (val < 0.6) {
+                world[key] = { type: 'grass', color: '#7CB342', hp: 10 };
+            } else {
+                world[key] = { type: 'stone', color: '#9E9E9E', hp: 50 };
+            }
+            
+            // Деревья
+            if (Math.random() < 0.015 && world[key].type === 'grass') {
+                world[key] = { type: 'tree', color: '#2E7D32', hp: 30 };
+            }
+            
+            // Ресурсы
+            if (Math.random() < 0.003 && world[key].type === 'stone') {
+                const ores = ['coal', 'iron', 'gold', 'diamond'];
+                const ore = ores[Math.floor(Math.random() * ores.length)];
+                world[key] = { type: ore, color: getOreColor(ore), hp: 40 };
+            }
+        }
+    }
+}
+
+function getOreColor(ore) {
+    const map = { coal: '#424242', iron: '#BDBDBD', gold: '#FFD700', diamond: '#4FC3F7' };
+    return map[ore] || '#888';
+}
+
+// ============================================================
+//  БЛОКИ (для инвентаря)
+// ============================================================
+const BLOCK_TYPES = {
+    dirt: { name: 'Земля', emoji: '🟫', color: '#8D6E63', hp: 10 },
+    plank: { name: 'Доски', emoji: '🪵', color: '#D7A86E', hp: 20 },
+    stone_block: { name: 'Камень', emoji: '🪨', color: '#9E9E9E', hp: 50 },
+    brick: { name: 'Кирпич', emoji: '🧱', color: '#C62828', hp: 70 },
+    wood: { name: 'Древесина', emoji: '🌲', color: '#5D4037', hp: 30 },
+};
+
+// ============================================================
+//  БАЗА ДАННЫХ (Turso)
+// ============================================================
+async function query(sql, params = []) {
+    try {
+        const resp = await fetch(`${TURSO_URL}/v2/pipeline`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TURSO_TOKEN}` },
+            body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql, args: params } }] })
+        });
+        const data = await resp.json();
+        if (data.results?.[0]?.response?.result) {
+            return data.results[0].response.result;
+        }
+        return null;
+    } catch(e) { console.error('DB Error:', e); return null; }
+}
+
+// ============================================================
+//  ИГРОК
+// ============================================================
+class Player {
+    constructor(id, name, symbol, x, y) {
+        this.id = id;
+        this.name = name;
+        this.symbol = symbol;
+        this.x = x || WORLD_SIZE/2 * BLOCK;
+        this.y = y || WORLD_SIZE/2 * BLOCK;
+        this.radius = 16;
+        this.speed = 3;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.angle = 0;
+        this.kills = 0;
+        this.money = 0;
+        this.alive = true;
+        this.color = '#4FC3F7';
+    }
+    
+    draw(ctx) {
+        if (!this.alive) return;
+        const sx = this.x - camera.x;
+        const sy = this.y - camera.y;
+        
+        // Тень
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        
+        // Тело
+        ctx.beginPath();
+        ctx.arc(sx, sy, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Глаза (направление)
+        const ex = sx + Math.cos(this.angle) * 8;
+        const ey = sy + Math.sin(this.angle) * 8;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(ex - 5, ey - 4, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(ex + 5, ey - 4, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(ex - 4 + Math.cos(this.angle)*2, ey - 4 + Math.sin(this.angle)*2, 2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(ex + 6 + Math.cos(this.angle)*2, ey - 4 + Math.sin(this.angle)*2, 2, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Имя
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 0;
+        ctx.fillText(`${this.symbol} ${this.name}`, sx, sy - 28);
+        
+        // HP
+        const hpW = 30;
+        const hpX = sx - hpW/2;
+        const hpY = sy - 20;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(hpX, hpY, hpW, 4);
+        ctx.fillStyle = this.hp/this.maxHp > 0.5 ? '#4CAF50' : this.hp/this.maxHp > 0.25 ? '#FF9800' : '#F44336';
+        ctx.fillRect(hpX, hpY, hpW * (this.hp/this.maxHp), 4);
+    }
+}
+
+// ============================================================
+//  ПУЛЯ
+// ============================================================
+class Bullet {
+    constructor(x, y, angle, ownerId, damage = 15) {
+        this.x = x;
+        this.y = y;
+        this.angle = angle;
+        this.speed = 400;
+        this.radius = 6;
+        this.damage = damage;
+        this.ownerId = ownerId;
+        this.alive = true;
+        this.life = 0;
+        this.maxLife = 1.5;
+    }
+    
+    update(dt) {
+        this.x += Math.cos(this.angle) * this.speed * dt;
+        this.y += Math.sin(this.angle) * this.speed * dt;
+        this.life += dt;
+        if (this.life > this.maxLife || this.x < 0 || this.x > WORLD_SIZE*BLOCK || this.y < 0 || this.y > WORLD_SIZE*BLOCK) {
+            this.alive = false;
+        }
+    }
+    
+    draw(ctx) {
+        const sx = this.x - camera.x;
+        const sy = this.y - camera.y;
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+        ctx.fillStyle = '#FFD700';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#FFF';
+        ctx.beginPath();
+        ctx.arc(sx - 2, sy - 2, 2, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+// ============================================================
+//  ЛОГИКА БОЯ
+// ============================================================
+function shoot() {
+    if (!player || !player.alive || mode !== 'combat') return;
+    const bullet = new Bullet(
+        player.x + Math.cos(player.angle) * 30,
+        player.y + Math.sin(player.angle) * 30,
+        player.angle,
+        player.id
+    );
+    bullets.push(bullet);
+    showToast('🔫 ПУХ!');
+}
+
+function checkBulletHits() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        if (!b.alive) { bullets.splice(i, 1); continue; }
+        
+        let hit = false;
+        for (const pid in players) {
+            const p = players[pid];
+            if (p.id === b.ownerId || !p.alive) continue;
+            const dx = b.x - p.x;
+            const dy = b.y - p.y;
+            if (Math.sqrt(dx*dx + dy*dy) < p.radius + b.radius) {
+                p.hp -= b.damage;
+                hit = true;
+                if (p.hp <= 0) {
+                    p.hp = 0;
+                    p.alive = false;
+                    const killer = players[b.ownerId];
+                    if (killer) {
+                        killer.kills++;
+                        killer.money += 10;
+                        showToast(`💀 ${killer.name} убил ${p.name}!`);
+                    }
+                    setTimeout(() => respawnPlayer(p), 3000);
+                }
+                break;
+            }
+        }
+        if (hit) {
+            bullets.splice(i, 1);
+        }
+    }
+}
+
+function respawnPlayer(p) {
+    p.hp = p.maxHp;
+    p.alive = true;
+    p.x = Math.random() * 200 * BLOCK + 50 * BLOCK;
+    p.y = Math.random() * 200 * BLOCK + 50 * BLOCK;
+}
+
+// ============================================================
+//  СТРОИТЕЛЬСТВО
+// ============================================================
+function placeBlock() {
+    if (!player || mode !== 'build') return;
+    const wx = Math.floor(mouse.worldX / BLOCK);
+    const wy = Math.floor(mouse.worldY / BLOCK);
+    const key = `${wx},${wy}`;
+    
+    // Нельзя ставить на игрока
+    for (const pid in players) {
+        const p = players[pid];
+        if (Math.abs(p.x - wx*BLOCK) < BLOCK && Math.abs(p.y - wy*BLOCK) < BLOCK) return;
+    }
+    
+    const blockKeys = ['dirt', 'plank', 'stone_block', 'brick', 'wood'];
+    const selected = blockKeys[selectedSlot];
+    if (!selected) return;
+    if ((inventory[selected] || 0) < 1) {
+        showToast('❌ Нет ресурсов!');
+        return;
+    }
+    
+    const blockInfo = BLOCK_TYPES[selected];
+    world[key] = { type: selected, color: blockInfo.color, hp: blockInfo.hp, owner: player.id };
+    inventory[selected]--;
+    showToast(`✅ Поставлен ${blockInfo.name}`);
+    updateInventoryUI();
+}
+
+function breakBlock() {
+    if (!player) return;
+    const wx = Math.floor(mouse.worldX / BLOCK);
+    const wy = Math.floor(mouse.worldY / BLOCK);
+    const key = `${wx},${wy}`;
+    
+    if (!world[key] || world[key].type === 'water' || world[key].type === 'grass') return;
+    
+    // Ломаем
+    const block = world[key];
+    block.hp -= 15;
+    if (block.hp <= 0) {
+        const resourceMap = {
+            tree: 'wood',
+            stone: 'stone_block',
+            coal: 'coal',
+            iron: 'iron',
+            gold: 'gold',
+            diamond: 'diamond',
+            dirt: 'dirt',
+            plank: 'plank',
+            brick: 'brick',
+            stone_block: 'stone_block',
+            wood: 'wood'
+        };
+        const res = resourceMap[block.type] || block.type;
+        if (res) {
+            inventory[res] = (inventory[res] || 0) + 1;
+            showToast(`⛏️ Добыт ${res}`);
+        }
+        world[key] = { type: 'grass', color: '#7CB342', hp: 10 };
+        updateInventoryUI();
+    }
+}
+
+// ============================================================
+//  ИНВЕНТАРЬ
+// ============================================================
+function updateInventoryUI() {
+    const container = document.getElementById('inventory');
+    container.innerHTML = '';
+    const blockKeys = ['dirt', 'plank', 'stone_block', 'brick', 'wood'];
+    
+    blockKeys.forEach((key, i) => {
+        const div = document.createElement('div');
+        div.className = `slot ${i === selectedSlot ? 'active' : ''}`;
+        div.innerHTML = `
+            <span>${BLOCK_TYPES[key].emoji}</span>
+            <span class="count">${inventory[key] || 0}</span>
+            <span class="label">${i+1}</span>
+        `;
+        div.onclick = () => { selectedSlot = i; updateInventoryUI(); };
+        container.appendChild(div);
+    });
+}
+
+// ============================================================
+//  РЕНДЕРИНГ МИРА (КРАСИВЫЙ!)
+// ============================================================
+function drawWorld() {
+    // Небо
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#0D1B2A');
+    grad.addColorStop(0.4, '#1B2838');
+    grad.addColorStop(0.7, '#2C3E50');
+    grad.addColorStop(1, '#3E5C3A');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    
+    // Определяем видимую область
+    const startX = Math.floor(camera.x / BLOCK) - 1;
+    const startY = Math.floor(camera.y / BLOCK) - 1;
+    const endX = startX + Math.ceil(W / BLOCK) + 2;
+    const endY = startY + Math.ceil(H / BLOCK) + 2;
+    
+    for (let x = startX; x < endX; x++) {
+        for (let y = startY; y < endY; y++) {
+            const key = `${x},${y}`;
+            const block = world[key];
+            if (!block) continue;
+            
+            const sx = x * BLOCK - camera.x;
+            const sy = y * BLOCK - camera.y;
+            
+            // Тень блока
+            ctx.shadowColor = 'rgba(0,0,0,0.2)';
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            
+            // Блок
+            ctx.fillStyle = block.color;
+            ctx.shadowBlur = 0;
+            ctx.fillRect(sx, sy, BLOCK, BLOCK);
+            
+            // Текстура для разных блоков
+            if (block.type === 'grass') {
+                // Травинки
+                ctx.strokeStyle = '#558B2F';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 3; i++) {
+                    const gx = sx + 4 + Math.random() * 24;
+                    const gy = sy + 6 + Math.random() * 20;
+                    ctx.beginPath();
+                    ctx.moveTo(gx, gy);
+                    ctx.lineTo(gx + (Math.random()-0.5)*3, gy - 6 - Math.random()*4);
+                    ctx.stroke();
+                }
+            } else if (block.type === 'water') {
+                // Блик на воде
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.fillRect(sx + 4, sy + 4, 8, 8);
+                ctx.fillRect(sx + 20, sy + 18, 6, 6);
+            } else if (block.type === 'tree') {
+                // Ствол
+                ctx.fillStyle = '#5D4037';
+                ctx.fillRect(sx + 12, sy + 14, 8, 18);
+                // Крона
+                ctx.fillStyle = '#2E7D32';
+                ctx.beginPath();
+                ctx.arc(sx + 16, sy + 8, 14, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = '#388E3C';
+                ctx.beginPath();
+                ctx.arc(sx + 6, sy + 14, 10, 0, Math.PI*2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(sx + 26, sy + 14, 10, 0, Math.PI*2);
+                ctx.fill();
+            } else if (block.type === 'stone') {
+                // Трещины
+                ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(sx + 6, sy + 6);
+                ctx.lineTo(sx + 20, sy + 14);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(sx + 16, sy + 22);
+                ctx.lineTo(sx + 26, sy + 10);
+                ctx.stroke();
+            } else if (block.type === 'diamond') {
+                // Блеск
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.beginPath();
+                ctx.moveTo(sx + 16, sy + 4);
+                ctx.lineTo(sx + 28, sy + 16);
+                ctx.lineTo(sx + 16, sy + 28);
+                ctx.lineTo(sx + 4, sy + 16);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.beginPath();
+                ctx.arc(sx + 12, sy + 12, 4, 0, Math.PI*2);
+                ctx.fill();
+            }
+            
+            // Рамка (сетка)
+            ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(sx, sy, BLOCK, BLOCK);
+        }
+    }
+}
+
+// ============================================================
+//  ОСНОВНОЙ ЦИКЛ
+// ============================================================
+let lastTime = 0;
+
+function gameLoop(timestamp) {
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+    lastTime = timestamp;
+    
+    update(dt);
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+    if (!player) return;
+    
+    // Движение
+    let dx = 0, dy = 0;
+    if (keys['w'] || keys['W'] || keys['ArrowUp']) dy = -1;
+    if (keys['s'] || keys['S'] || keys['ArrowDown']) dy = 1;
+    if (keys['a'] || keys['A'] || keys['ArrowLeft']) dx = -1;
+    if (keys['d'] || keys['D'] || keys['ArrowRight']) dx = 1;
+    
+    if (dx || dy) {
+        const len = Math.sqrt(dx*dx + dy*dy);
+        dx /= len; dy /= len;
+        player.x += dx * player.speed * dt * 60;
+        player.y += dy * player.speed * dt * 60;
+        player.angle = Math.atan2(dy, dx);
+    }
+    
+    // Границы мира
+    player.x = Math.max(0, Math.min(WORLD_SIZE * BLOCK, player.x));
+    player.y = Math.max(0, Math.min(WORLD_SIZE * BLOCK, player.y));
+    
+    // Камера
+    camera.x = player.x - W/2;
+    camera.y = player.y - H/2;
+    camera.x = Math.max(0, Math.min(WORLD_SIZE * BLOCK - W, camera.x));
+    camera.y = Math.max(0, Math.min(WORLD_SIZE * BLOCK - H, camera.y));
+    
+    // Обновляем пули
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        bullets[i].update(dt);
+        if (!bullets[i].alive) bullets.splice(i, 1);
+    }
+    checkBulletHits();
+    
+    // Обновляем HUD
+    document.getElementById('hpDisplay').textContent = Math.floor(player.hp);
+    document.getElementById('moneyDisplay').textContent = player.money;
+    document.getElementById('killsDisplay').textContent = player.kills;
+    document.getElementById('playersOnline').textContent = Object.keys(players).length;
+    document.getElementById('coordsDisplay').textContent = `📍 ${Math.floor(player.x/BLOCK)}, ${Math.floor(player.y/BLOCK)}`;
+}
+
+function render() {
+    ctx.clearRect(0, 0, W, H);
+    drawWorld();
+    
+    // Пули
+    bullets.forEach(b => b.draw(ctx));
+    
+    // Игроки
+    for (const pid in players) {
+        players[pid].draw(ctx);
+    }
+    
+    // Прицел
+    if (mode === 'combat') {
+        ctx.strokeStyle = 'rgba(255,0,0,0.3)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(mouse.x, mouse.y, 20, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    } else {
+        // Строительный прицел
+        const wx = Math.floor(mouse.worldX / BLOCK) * BLOCK - camera.x;
+        const wy = Math.floor(mouse.worldY / BLOCK) * BLOCK - camera.y;
+        ctx.strokeStyle = 'rgba(255,215,0,0.5)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wx, wy, BLOCK, BLOCK);
+        ctx.fillStyle = 'rgba(255,215,0,0.05)';
+        ctx.fillRect(wx, wy, BLOCK, BLOCK);
+    }
+}
+
+// ============================================================
+//  ВВОД
+// ============================================================
+document.addEventListener('keydown', (e) => {
+    keys[e.key] = true;
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        mode = mode === 'combat' ? 'build' : 'combat';
+        document.getElementById('modeIndicator').textContent = mode === 'combat' ? '🔫 Боевой режим [TAB]' : '🏗️ Стройка [TAB]';
+        showToast(mode === 'combat' ? '🔫 Боевой режим' : '🏗️ Режим строительства');
+    }
+    if (e.key >= '1' && e.key <= '5') {
+        selectedSlot = parseInt(e.key) - 1;
+        updateInventoryUI();
+    }
+});
+
+document.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+    mouse.worldX = mouse.x + camera.x;
+    mouse.worldY = mouse.y + camera.y;
+    if (player) {
+        player.angle = Math.atan2(mouse.y - (player.y - camera.y), mouse.x - (player.x - camera.x));
+    }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (!player) return;
+    if (e.button === 0) { // ЛКМ - ломать
+        breakBlock();
+    } else if (e.button === 2) { // ПКМ
+        if (mode === 'combat') {
+            shoot();
+        } else {
+            placeBlock();
+        }
+    }
+});
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ============================================================
+//  ЛОГИН
+// ============================================================
+let playerId = null;
+
+async function login() {
+    const name = document.getElementById('nameInput').value.trim() || 'Player';
+    const symbol = document.getElementById('symbolInput').value.trim() || '😈';
+    
+    // Проверяем или создаем игрока в БД
+    let result = await query('SELECT id, name, symbol, x, y, hp, kills, money FROM players WHERE name = ?', [name]);
+    if (result && result.rows && result.rows.length > 0) {
+        const row = result.rows[0];
+        playerId = row[0];
+        player = new Player(row[0], row[1], row[2], row[3] || WORLD_SIZE/2 * BLOCK, row[4] || WORLD_SIZE/2 * BLOCK);
+        player.hp = row[5] || 100;
+        player.kills = row[6] || 0;
+        player.money = row[7] || 0;
+        showToast(`👋 С возвращением, ${player.name}!`);
+    } else {
+        // Создаем нового
+        const x = Math.random() * 100 * BLOCK + 50 * BLOCK;
+        const y = Math.random() * 100 * BLOCK + 50 * BLOCK;
+        result = await query(
+            'INSERT INTO players (name, symbol, x, y) VALUES (?, ?, ?, ?) RETURNING id',
+            [name, symbol, x, y]
+        );
+        if (result && result.rows && result.rows.length > 0) {
+            playerId = result.rows[0][0];
+            player = new Player(playerId, name, symbol, x, y);
+            showToast(`🎉 Добро пожаловать, ${player.name}!`);
+        } else {
+            showToast('❌ Ошибка создания игрока');
+            return;
+        }
+    }
+    
+    // Загружаем инвентарь
+    const invResult = await query('SELECT item, count FROM inventory WHERE player_id = ?', [playerId]);
+    if (invResult && invResult.rows) {
+        inventory = {};
+        invResult.rows.forEach(r => { inventory[r[0]] = r[1]; });
+    }
+    
+    // Сохраняем в players локально
+    players[playerId] = player;
+    
+    document.getElementById('loginOverlay').classList.add('hidden');
+    updateInventoryUI();
+    
+    // Загружаем других игроков
+    loadPlayers();
+}
+
+async function loadPlayers() {
+    const result = await query('SELECT id, name, symbol, x, y, hp, kills, money FROM players WHERE id != ?', [playerId]);
+    if (result && result.rows) {
+        result.rows.forEach(row => {
+            if (!players[row[0]]) {
+                const p = new Player(row[0], row[1], row[2], row[3], row[4]);
+                p.hp = row[5] || 100;
+                p.kills = row[6] || 0;
+                p.money = row[7] || 0;
+                players[row[0]] = p;
+            }
+        });
+    }
+}
+
+// ============================================================
+//  ТОСТЫ
+// ============================================================
+let toastTimeout;
+
+function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ============================================================
+//  СОХРАНЕНИЕ В БД (каждые 10 секунд)
+// ============================================================
+setInterval(async () => {
+    if (!player || !playerId) return;
+    await query('UPDATE players SET x = ?, y = ?, hp = ?, kills = ?, money = ? WHERE id = ?', [
+        player.x, player.y, player.hp, player.kills, player.money, playerId
+    ]);
+    
+    // Сохраняем инвентарь
+    for (const [item, count] of Object.entries(inventory)) {
+        await query(
+            'INSERT INTO inventory (player_id, item, count) VALUES (?, ?, ?) ON CONFLICT(player_id, item) DO UPDATE SET count = ?',
+            [playerId, item, count, count]
+        );
+    }
+}, 10000);
+
+// ============================================================
+//  ЗАПУСК
+// ============================================================
+initWorld();
+gameLoop(0);
+
+// Периодически обновляем других игроков
+setInterval(loadPlayers, 5000);
+
+console.log('🏕️ LuSMP загружена!');
+</script>
+</body>
+</html>
