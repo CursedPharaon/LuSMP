@@ -97,7 +97,6 @@ let toastTimeout;
 // ============================================================
 async function queryTurso(sql, params = []) {
     try {
-        // Строим запрос в правильном формате для Turso
         const body = {
             requests: [{
                 type: "execute",
@@ -107,7 +106,7 @@ async function queryTurso(sql, params = []) {
             }]
         };
         
-        // Добавляем аргументы, если они есть (просто массив значений)
+        // Если есть параметры, добавляем их как массив
         if (params.length > 0) {
             body.requests[0].stmt.args = params;
         }
@@ -604,35 +603,42 @@ async function login() {
     loginBtn.textContent = '⏳ Подключение...';
     
     try {
-        // Сначала создаем таблицы (если их нет)
-        console.log('📦 Проверка/создание таблиц...');
-        await queryTurso(`
-            CREATE TABLE IF NOT EXISTS players (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                symbol TEXT DEFAULT '😈',
-                x REAL DEFAULT 0,
-                y REAL DEFAULT 0,
-                hp REAL DEFAULT 100,
-                kills INTEGER DEFAULT 0,
-                money INTEGER DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        await queryTurso(`
-            CREATE TABLE IF NOT EXISTS inventory (
-                player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-                item TEXT NOT NULL,
-                count INTEGER DEFAULT 0,
-                PRIMARY KEY (player_id, item)
-            )
-        `);
-        console.log('✅ Таблицы готовы');
+        // Сначала проверяем, есть ли таблицы
+        console.log('📦 Проверка таблиц...');
+        let result = await queryTurso("SELECT name FROM sqlite_master WHERE type='table' AND name='players'");
+        console.log('Результат проверки:', result);
+        
+        // Если таблиц нет — создаём
+        if (!result || !result.rows || result.rows.length === 0) {
+            console.log('📦 Создание таблиц...');
+            await queryTurso(`
+                CREATE TABLE players (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    symbol TEXT DEFAULT '😈',
+                    x REAL DEFAULT 0,
+                    y REAL DEFAULT 0,
+                    hp REAL DEFAULT 100,
+                    kills INTEGER DEFAULT 0,
+                    money INTEGER DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            await queryTurso(`
+                CREATE TABLE inventory (
+                    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+                    item TEXT NOT NULL,
+                    count INTEGER DEFAULT 0,
+                    PRIMARY KEY (player_id, item)
+                )
+            `);
+            console.log('✅ Таблицы созданы');
+        }
         
         // Ищем игрока
         console.log('🔍 Поиск игрока:', name);
-        let result = await queryTurso('SELECT id, name, symbol, x, y, hp, kills, money FROM players WHERE name = ?', [name]);
-        console.log('Результат:', result);
+        result = await queryTurso('SELECT id, name, symbol, x, y, hp, kills, money FROM players WHERE name = ?', [name]);
+        console.log('Результат поиска:', result);
         
         if (result && result.rows && result.rows.length > 0) {
             const row = result.rows[0];
@@ -710,7 +716,7 @@ async function loadPlayers() {
 }
 
 // ============================================================
-//  СОХРАНЕНИЕ (каждые 15 секунд)
+//  СОХРАНЕНИЕ
 // ============================================================
 setInterval(async () => {
     if (!player || !playerId || !isLoggedIn) return;
