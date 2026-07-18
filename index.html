@@ -6,26 +6,9 @@
     <title>LuSMP - 2D хардкор</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
-        body, html { 
-            width: 100%; height: 100%; 
-            background: #0a0a0f; 
-            overflow: hidden;
-            font-family: 'Segoe UI', sans-serif;
-        }
-        #gameContainer {
-            width: 100vw;
-            height: 100vh;
-            position: relative;
-            background: #0a0a0f;
-        }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            background: #1a237e;
-            cursor: crosshair;
-        }
-        /* HUD */
+        body, html { width: 100%; height: 100%; background: #0a0a0f; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        #gameContainer { width: 100vw; height: 100vh; position: relative; background: #0a0a0f; }
+        canvas { display: block; width: 100%; height: 100%; background: #1a237e; cursor: crosshair; }
         #ui {
             position: absolute;
             top: 10px;
@@ -52,7 +35,6 @@
         .hud .life { color: #ff6b6b; }
         .hud .law { color: #4fc3f7; }
 
-        /* Инвентарь */
         #inventory {
             position: absolute;
             bottom: 20px;
@@ -87,7 +69,6 @@
         .slot.active { border-color: #ffd700; background: rgba(255,215,0,0.12); }
         .slot .count { font-size: 9px; color: #aaa; position: absolute; bottom: 1px; right: 3px; }
 
-        /* Чат */
         #chatContainer {
             position: absolute;
             bottom: 80px;
@@ -104,10 +85,7 @@
             pointer-events: auto;
             transition: 0.3s;
         }
-        #chatContainer.minimized {
-            max-height: 36px;
-            overflow: hidden;
-        }
+        #chatContainer.minimized { max-height: 36px; overflow: hidden; }
         #chatMessages {
             flex: 1;
             overflow-y: auto;
@@ -149,22 +127,7 @@
             cursor: pointer;
             font-size: 12px;
         }
-        #chatToggle {
-            position: absolute;
-            bottom: 80px;
-            left: 20px;
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-            border: none;
-            padding: 4px 12px;
-            border-radius: 6px;
-            font-size: 11px;
-            cursor: pointer;
-            z-index: 11;
-            display: none;
-        }
 
-        /* Логин */
         #loginOverlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -217,7 +180,6 @@
         #loginError { color: #ff6b6b; font-size: 13px; margin-top: 8px; display: none; max-width: 400px; text-align: center; }
         .login-status { font-size: 11px; color: #666; margin-top: 6px; }
 
-        /* Режим */
         #modeIndicator {
             position: absolute;
             top: 60px;
@@ -232,7 +194,6 @@
             pointer-events: none;
             z-index: 10;
         }
-        /* Тост */
         #toast {
             position: fixed;
             bottom: 140px;
@@ -266,18 +227,9 @@
             pointer-events: auto;
         }
         .fullscreen-btn:hover { background: rgba(255,255,255,0.1); }
-        /* Скролл чата */
         #chatMessages::-webkit-scrollbar { width: 3px; }
         #chatMessages::-webkit-scrollbar-track { background: transparent; }
         #chatMessages::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-        @media (max-width: 600px) {
-            #chatContainer { width: 260px; left: 10px; bottom: 70px; max-height: 150px; }
-            #inventory { padding: 4px 6px; gap: 2px; }
-            .slot { width: 36px; height: 36px; font-size: 14px; }
-            .hud { font-size: 10px; padding: 4px 10px; }
-            #loginOverlay h1 { font-size: 28px; }
-            #loginOverlay input { width: 160px; }
-        }
     </style>
 </head>
 <body>
@@ -285,7 +237,6 @@
 <div id="gameContainer">
     <canvas id="game"></canvas>
     
-    <!-- HUD -->
     <div id="ui">
         <div class="hud">❤️ <span class="life" id="hpDisplay">3</span> | 💰 <span id="moneyDisplay">0</span></div>
         <div class="hud">👤 <span id="playerNameDisplay">Гость</span> <span id="factionDisplay"></span></div>
@@ -293,13 +244,10 @@
     </div>
     
     <div id="modeIndicator">🔫 Боевой режим [TAB]</div>
-    
     <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶ Полный экран</button>
     
-    <!-- Инвентарь -->
     <div id="inventory"></div>
     
-    <!-- Чат -->
     <div id="chatContainer" class="minimized">
         <div id="chatMessages"></div>
         <div id="chatInput">
@@ -307,15 +255,13 @@
             <button onclick="sendMessage()">➤</button>
         </div>
     </div>
-    <button id="chatToggle" onclick="toggleChat()">💬</button>
     
-    <!-- Логин -->
     <div id="loginOverlay">
         <h1>🏕️ LuSMP</h1>
         <div class="sub">Хардкорная 2D песочница</div>
         <div class="login-row">
-            <input type="text" id="nameInput" placeholder="Ник" value="Player">
-            <input type="password" id="passwordInput" placeholder="Пароль" value="123">
+            <input type="text" id="nameInput" placeholder="Ник" value="pharaon">
+            <input type="password" id="passwordInput" placeholder="Пароль" value="admin123">
         </div>
         <button onclick="login()">🎮 Войти</button>
         <div id="loginError"></div>
@@ -363,42 +309,68 @@ let chatMinimized = true;
 let toastTimeout;
 let seasonEnd = null;
 
-// Фракции
-const FACTIONS = {
-    law: { name: 'Закон', color: '#4fc3f7', roles: ['Сотрудник', 'Лидер'] },
-    none: { name: 'Нейтрал', color: '#888', roles: [] }
-};
-
 // ============================================================
-//  ЗАПРОСЫ К TURSO
+//  ЗАПРОСЫ К TURSO (ПОЛНОСТЬЮ ПЕРЕПИСАНЫ)
 // ============================================================
 async function queryTurso(sql, params = []) {
+    // Формируем правильный запрос для Turso
+    // ВСЕ параметры передаются как СТРОКИ!
     const body = {
         requests: [{
             type: "execute",
             stmt: {
-                sql: sql,
-                args: params.map(p => {
-                    if (typeof p === 'string') return { type: 'text', value: p };
-                    if (typeof p === 'number') return { type: 'integer', value: p };
-                    if (typeof p === 'boolean') return { type: 'boolean', value: p };
-                    return { type: 'null', value: null };
-                })
+                sql: sql
             }
         }]
     };
     
+    // Добавляем параметры ТОЛЬКО если они есть
+    // И ВСЕГДА как строки (Turso не любит числа в args)
+    if (params.length > 0) {
+        body.requests[0].stmt.args = params.map(p => String(p));
+    }
+    
+    console.log('📤 SQL:', sql);
+    console.log('📤 Params:', params);
+    
     const resp = await fetch(`${TURSO_URL}/v2/pipeline`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TURSO_TOKEN}` },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TURSO_TOKEN}`
+        },
         body: JSON.stringify(body)
     });
+    
     const data = await resp.json();
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${data.error || JSON.stringify(data)}`);
-    if (data.results?.[0]?.response?.result) return data.results[0].response.result;
-    if (data.results?.[0]?.response?.error) throw new Error(data.results[0].response.error);
+    console.log('📥 Ответ:', JSON.stringify(data, null, 2));
+    
+    if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}: ${data.error || JSON.stringify(data)}`);
+    }
+    
+    if (data.results && data.results[0] && data.results[0].response) {
+        if (data.results[0].response.error) {
+            throw new Error(data.results[0].response.error);
+        }
+        if (data.results[0].response.result) {
+            return data.results[0].response.result;
+        }
+    }
     return null;
 }
+
+// ============================================================
+//  РАЗМЕР ОКНА
+// ============================================================
+function resizeCanvas() {
+    const container = document.getElementById('gameContainer');
+    W = container.clientWidth;
+    H = container.clientHeight;
+    canvas.width = W;
+    canvas.height = H;
+}
+window.addEventListener('resize', resizeCanvas);
 
 // ============================================================
 //  МИР
@@ -461,7 +433,6 @@ class Player {
         this.factionRole = data.factionRole || '';
         this.isAdmin = data.isAdmin || false;
         this.isBanned = data.isBanned || false;
-        this.createdAt = data.createdAt || Date.now();
     }
     
     get isLaw() { return this.faction === 'law'; }
@@ -478,7 +449,6 @@ class Player {
         const sy = this.y - camera.y;
         if (sx < -50 || sx > W+50 || sy < -50 || sy > H+50) return;
         
-        // Тень
         ctx.shadowColor = 'rgba(0,0,0,0.3)';
         ctx.shadowBlur = 16;
         ctx.shadowOffsetX = 3;
@@ -492,7 +462,6 @@ class Player {
         ctx.lineWidth = this.isLaw ? 3 : 2;
         ctx.stroke();
         
-        // Глаза
         const ex = sx + Math.cos(this.angle) * 8;
         const ey = sy + Math.sin(this.angle) * 8;
         ctx.fillStyle = '#fff';
@@ -510,7 +479,6 @@ class Player {
         ctx.arc(ex + 6 + Math.cos(this.angle)*2, ey - 4 + Math.sin(this.angle)*2, 2, 0, Math.PI*2);
         ctx.fill();
         
-        // Имя
         ctx.fillStyle = this.isAdmin ? '#ff6b6b' : '#fff';
         ctx.font = this.isAdmin ? 'bold 12px Arial' : '11px Arial';
         ctx.textAlign = 'center';
@@ -519,21 +487,18 @@ class Player {
         if (this.isAdmin) displayName = '👑 ' + displayName;
         ctx.fillText(displayName, sx, sy - 28);
         
-        // Фракция (под именем)
         if (this.isLaw) {
             ctx.fillStyle = '#4fc3f7';
             ctx.font = '9px Arial';
             ctx.fillText(`👮 ${this.factionRole || 'Сотрудник'} Закона`, sx, sy - 38);
         }
         
-        // Жизни (над именем)
         ctx.fillStyle = '#ff6b6b';
         ctx.font = '10px Arial';
         let livesStr = '';
         for (let i = 0; i < this.lives; i++) livesStr += '❤️';
         ctx.fillText(livesStr || '💀', sx, sy - 48);
         
-        // HP
         const hpW = 30;
         const hpX = sx - hpW/2;
         const hpY = sy - 20;
@@ -579,18 +544,6 @@ class Bullet {
         ctx.fill();
     }
 }
-
-// ============================================================
-//  РАЗМЕР ОКНА
-// ============================================================
-function resizeCanvas() {
-    const container = document.getElementById('gameContainer');
-    W = container.clientWidth;
-    H = container.clientHeight;
-    canvas.width = W;
-    canvas.height = H;
-}
-window.addEventListener('resize', resizeCanvas);
 
 // ============================================================
 //  РЕНДЕРИНГ
@@ -674,8 +627,6 @@ function checkBulletHits() {
                     const killer = players[b.ownerId];
                     if (killer) { killer.kills++; killer.money += 10; }
                     showToast(`💀 ${p.name} убит! Осталось жизней: ${p.lives}`);
-                    
-                    // Проверка на бан
                     if (p.lives <= 0) {
                         p.isBanned = true;
                         showToast(`⛔ ${p.name} забанен до конца сезона!`);
@@ -779,28 +730,18 @@ async function sendMessage() {
     if (!text || !player) return;
     input.value = '';
     
-    // Команды
     if (text.startsWith('/')) {
         handleCommand(text);
         return;
     }
     
-    // Обычное сообщение
     addChatMessage('user', text, player.name);
-    // Сохраняем в БД (для истории)
     try {
         await queryTurso(
             'INSERT INTO chat (player_name, message) VALUES (?, ?)',
             [player.name, text]
         );
     } catch(e) {}
-}
-
-function toggleChat() {
-    chatMinimized = !chatMinimized;
-    document.getElementById('chatContainer').classList.toggle('minimized', chatMinimized);
-    document.getElementById('chatToggle').style.display = chatMinimized ? 'block' : 'none';
-    if (!chatMinimized) document.getElementById('chatInputField').focus();
 }
 
 // ============================================================
@@ -912,27 +853,30 @@ async function handleCommand(cmd) {
 }
 
 // ============================================================
-//  СЕЗОН И ВАЙП
+//  СЕЗОН
 // ============================================================
 async function checkSeason() {
-    const result = await queryTurso('SELECT value FROM settings WHERE key = "season_end"');
-    if (result && result.rows && result.rows.length > 0) {
-        seasonEnd = new Date(parseInt(result.rows[0][0]));
-    } else {
-        seasonEnd = new Date(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000);
-        await queryTurso('INSERT INTO settings (key, value) VALUES ("season_end", ?)', [seasonEnd.getTime()]);
-    }
-    
-    if (Date.now() > seasonEnd.getTime()) {
-        // ВАЙП
-        addChatMessage('system', '🔄 НАЧИНАЕТСЯ НОВЫЙ СЕЗОН! ВСЁ ОБНУЛЕНО!');
-        await queryTurso('DELETE FROM players');
-        await queryTurso('DELETE FROM inventory');
-        await queryTurso('DELETE FROM chat');
-        await queryTurso('UPDATE settings SET value = ? WHERE key = "season_end"', [Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000]);
-        seasonEnd = new Date(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000);
-        showToast('🔄 НОВЫЙ СЕЗОН! ВСЁ ОБНУЛЕНО!');
-        location.reload();
+    try {
+        const result = await queryTurso('SELECT value FROM settings WHERE key = "season_end"');
+        if (result && result.rows && result.rows.length > 0) {
+            seasonEnd = new Date(parseInt(result.rows[0][0]));
+        } else {
+            seasonEnd = new Date(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000);
+            await queryTurso('INSERT INTO settings (key, value) VALUES ("season_end", ?)', [String(seasonEnd.getTime())]);
+        }
+        
+        if (Date.now() > seasonEnd.getTime()) {
+            addChatMessage('system', '🔄 НАЧИНАЕТСЯ НОВЫЙ СЕЗОН! ВСЁ ОБНУЛЕНО!');
+            await queryTurso('DELETE FROM players');
+            await queryTurso('DELETE FROM inventory');
+            await queryTurso('DELETE FROM chat');
+            await queryTurso('UPDATE settings SET value = ? WHERE key = "season_end"', [String(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000)]);
+            seasonEnd = new Date(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000);
+            showToast('🔄 НОВЫЙ СЕЗОН! ВСЁ ОБНУЛЕНО!');
+            location.reload();
+        }
+    } catch(e) {
+        console.error('Ошибка проверки сезона:', e);
     }
 }
 
@@ -1005,17 +949,14 @@ async function login() {
             [name]
         );
         
-        let isNew = false;
         let playerData;
+        let isNew = false;
         
         if (result && result.rows && result.rows.length > 0) {
             const row = result.rows[0];
-            if (row[2] && row[2] !== password && row[1] === ADMIN_NAME) {
-                throw new Error('Неверный пароль для администратора');
-            }
-            if (row[2] && row[2] !== password && row[1] !== ADMIN_NAME) {
-                // Для обычных игроков — обновляем пароль
-                await queryTurso('UPDATE players SET password = ? WHERE id = ?', [password, row[0]]);
+            // Проверка пароля
+            if (row[2] && row[2] !== password) {
+                throw new Error('Неверный пароль');
             }
             playerData = {
                 id: row[0], name: row[1], password: row[2] || password,
@@ -1031,7 +972,7 @@ async function login() {
             const isAdmin = (name === ADMIN_NAME);
             const insertResult = await queryTurso(
                 'INSERT INTO players (name, password, x, y, isAdmin) VALUES (?, ?, ?, ?, ?) RETURNING id',
-                [name, password, x, y, isAdmin ? 1 : 0]
+                [name, password, String(x), String(y), isAdmin ? '1' : '0']
             );
             if (!insertResult?.rows?.length) throw new Error('Не удалось создать игрока');
             playerData = {
@@ -1049,10 +990,10 @@ async function login() {
         }
         
         // Загружаем инвентарь
-        const invResult = await queryTurso('SELECT item, count FROM inventory WHERE player_id = ?', [playerData.id]);
+        const invResult = await queryTurso('SELECT item, count FROM inventory WHERE player_id = ?', [String(playerData.id)]);
         if (invResult && invResult.rows) {
             inventory = {};
-            invResult.rows.forEach(r => { inventory[r[0]] = r[1]; });
+            invResult.rows.forEach(r => { inventory[r[0]] = parseInt(r[1]); });
         }
         
         // Создаём игрока
@@ -1080,7 +1021,6 @@ async function login() {
         dbStatus.textContent = '✅ Игра запущена!';
         dbStatus.style.color = '#4caf50';
         
-        // Если админ — приветствие
         if (player.isAdmin) {
             addChatMessage('system', '👑 Вы вошли как администратор! /help для списка команд');
         }
@@ -1102,13 +1042,13 @@ async function loadPlayers() {
     try {
         const result = await queryTurso(
             'SELECT id, name, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE id != ? AND isBanned = 0',
-            [playerId]
+            [String(playerId)]
         );
         if (result && result.rows) {
             result.rows.forEach(row => {
                 if (!players[row[0]]) {
                     const p = new Player({
-                        id: row[0], name: row[1], x: row[2], y: row[3],
+                        id: row[0], name: row[1], x: parseFloat(row[2]), y: parseFloat(row[3]),
                         hp: row[4], lives: row[5] || MAX_LIVES, kills: row[6] || 0,
                         money: row[7] || 0, faction: row[8] || 'none',
                         factionRole: row[9] || '', isAdmin: row[10] === 1,
@@ -1120,6 +1060,51 @@ async function loadPlayers() {
         }
     } catch(e) { console.error('Ошибка загрузки игроков:', e); }
 }
+
+// ============================================================
+//  ПОЛНЫЙ ЭКРАН
+// ============================================================
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+// ============================================================
+//  ТОСТ
+// ============================================================
+function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ============================================================
+//  СОХРАНЕНИЕ
+// ============================================================
+setInterval(async () => {
+    if (!player || !playerId || !isLoggedIn) return;
+    try {
+        await queryTurso(
+            'UPDATE players SET x = ?, y = ?, hp = ?, lives = ?, kills = ?, money = ?, faction = ?, factionRole = ? WHERE id = ?',
+            [String(player.x), String(player.y), String(Math.floor(player.hp)), String(player.lives), String(player.kills), String(player.money), player.faction, player.factionRole, String(playerId)]
+        );
+        for (const [item, count] of Object.entries(inventory)) {
+            if (count === 0) {
+                await queryTurso('DELETE FROM inventory WHERE player_id = ? AND item = ?', [String(playerId), item]);
+            } else {
+                await queryTurso(
+                    'INSERT INTO inventory (player_id, item, count) VALUES (?, ?, ?) ON CONFLICT(player_id, item) DO UPDATE SET count = ?',
+                    [String(playerId), item, String(count), String(count)]
+                );
+            }
+        }
+    } catch(e) { console.error('Ошибка сохранения:', e); }
+}, 15000);
 
 // ============================================================
 //  ИГРОВОЙ ЦИКЛ
@@ -1155,14 +1140,12 @@ function update(dt) {
     camera.x = Math.max(0, Math.min(WORLD_SIZE * BLOCK - W, camera.x));
     camera.y = Math.max(0, Math.min(WORLD_SIZE * BLOCK - H, camera.y));
     
-    // Пули
     for (let i = bullets.length - 1; i >= 0; i--) {
         bullets[i].update(dt);
         if (!bullets[i].alive) bullets.splice(i, 1);
     }
     checkBulletHits();
     
-    // HUD
     document.getElementById('hpDisplay').textContent = player.lives;
     document.getElementById('moneyDisplay').textContent = player.money;
     document.getElementById('playersOnline').textContent = Object.keys(players).length + 1;
@@ -1179,7 +1162,6 @@ function render() {
     for (const pid in players) players[pid].draw(ctx);
     if (player) player.draw(ctx);
     
-    // Прицел
     if (mode === 'combat') {
         ctx.strokeStyle = 'rgba(255,0,0,0.2)';
         ctx.lineWidth = 1;
@@ -1214,12 +1196,6 @@ document.addEventListener('keydown', (e) => {
         selectedSlot = parseInt(e.key) - 1;
         updateInventoryUI();
     }
-    if (e.key === 'Enter' && !document.getElementById('chatInputField').matches(':focus')) {
-        toggleChat();
-    }
-    if (e.key === 'Escape') {
-        document.getElementById('chatInputField').blur();
-    }
 });
 document.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
@@ -1248,51 +1224,6 @@ canvas.addEventListener('mousedown', (e) => {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // ============================================================
-//  ПОЛНЫЙ ЭКРАН
-// ============================================================
-function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-    } else {
-        document.exitFullscreen();
-    }
-}
-
-// ============================================================
-//  ТОСТ
-// ============================================================
-function showToast(msg) {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.classList.add('show');
-    clearTimeout(toastTimeout);
-    toastTimeout = setTimeout(() => el.classList.remove('show'), 2500);
-}
-
-// ============================================================
-//  СОХРАНЕНИЕ
-// ============================================================
-setInterval(async () => {
-    if (!player || !playerId || !isLoggedIn) return;
-    try {
-        await queryTurso(
-            'UPDATE players SET x = ?, y = ?, hp = ?, lives = ?, kills = ?, money = ?, faction = ?, factionRole = ? WHERE id = ?',
-            [player.x, player.y, Math.floor(player.hp), player.lives, player.kills, player.money, player.faction, player.factionRole, playerId]
-        );
-        for (const [item, count] of Object.entries(inventory)) {
-            if (count === 0) {
-                await queryTurso('DELETE FROM inventory WHERE player_id = ? AND item = ?', [playerId, item]);
-            } else {
-                await queryTurso(
-                    'INSERT INTO inventory (player_id, item, count) VALUES (?, ?, ?) ON CONFLICT(player_id, item) DO UPDATE SET count = ?',
-                    [playerId, item, count, count]
-                );
-            }
-        }
-    } catch(e) { console.error('Ошибка сохранения:', e); }
-}, 15000);
-
-// ============================================================
 //  ЗАПУСК
 // ============================================================
 resizeCanvas();
@@ -1314,11 +1245,6 @@ queryTurso('SELECT 1 as test')
         document.getElementById('dbStatus').textContent = '⚠️ Turso недоступна';
         document.getElementById('dbStatus').style.color = '#ff9800';
     });
-
-// Автоматическое открытие чата по клику
-document.getElementById('chatContainer').addEventListener('click', () => {
-    if (chatMinimized) toggleChat();
-});
 </script>
 </body>
 </html>
