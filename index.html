@@ -108,15 +108,16 @@
             right: 3px;
         }
 
+        /* ===== БОЛЬШОЙ ЧАТ ===== */
         #chatContainer {
             position: absolute;
             bottom: 80px;
             left: 20px;
-            width: 340px;
-            max-height: 200px;
-            background: rgba(0, 0, 0, 0.8);
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            width: 500px;
+            max-height: 350px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(8px);
             display: flex;
             flex-direction: column;
@@ -125,28 +126,29 @@
             transition: 0.3s;
         }
         #chatContainer.minimized {
-            max-height: 36px;
+            max-height: 40px;
             overflow: hidden;
         }
         #chatMessages {
             flex: 1;
             overflow-y: auto;
-            padding: 6px 10px;
-            max-height: 160px;
-            font-size: 12px;
-            color: #ccc;
+            padding: 8px 12px;
+            max-height: 280px;
+            font-size: 14px;
+            color: #ddd;
+            line-height: 1.5;
         }
         #chatMessages .msg {
-            padding: 2px 0;
+            padding: 3px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
         }
         #chatMessages .msg .name {
             font-weight: bold;
         }
         #chatMessages .msg .time {
-            color: #555;
-            font-size: 10px;
-            margin-right: 6px;
+            color: #666;
+            font-size: 11px;
+            margin-right: 8px;
         }
         #chatMessages .system {
             color: #ffd700;
@@ -160,32 +162,35 @@
         }
         #chatInput {
             display: flex;
-            padding: 4px 8px;
-            gap: 6px;
+            padding: 6px 10px;
+            gap: 8px;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
         #chatInput input {
             flex: 1;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.06);
             border: none;
             color: #fff;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 14px;
             outline: none;
         }
         #chatInput input::placeholder {
-            color: #555;
+            color: #666;
         }
         #chatInput button {
             background: #ffd700;
             color: #000;
             border: none;
-            padding: 2px 12px;
-            border-radius: 4px;
+            padding: 4px 16px;
+            border-radius: 6px;
             font-weight: bold;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 14px;
+        }
+        #chatInput button:hover {
+            opacity: 0.9;
         }
 
         #loginOverlay {
@@ -319,14 +324,17 @@
             background: rgba(255, 255, 255, 0.1);
         }
         #chatMessages::-webkit-scrollbar {
-            width: 3px;
+            width: 4px;
         }
         #chatMessages::-webkit-scrollbar-track {
             background: transparent;
         }
         #chatMessages::-webkit-scrollbar-thumb {
-            background: #333;
-            border-radius: 3px;
+            background: #444;
+            border-radius: 4px;
+        }
+        #chatMessages::-webkit-scrollbar-thumb:hover {
+            background: #666;
         }
     </style>
 </head>
@@ -445,6 +453,29 @@
         }
 
         // ============================================================
+        //  ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО ПОЛУЧЕНИЯ СТРОКИ ИЗ ОБЪЕКТА
+        // ============================================================
+        function safeString(value) {
+            if (value === undefined || value === null) return '';
+            if (typeof value === 'object') {
+                // Если это объект — достаём первое значение
+                const val = value.value || value[0] || Object.values(value)[0] || '';
+                return String(val).trim();
+            }
+            return String(value).trim();
+        }
+
+        function safeNumber(value) {
+            const str = safeString(value);
+            return parseFloat(str) || 0;
+        }
+
+        function safeInt(value) {
+            const str = safeString(value);
+            return parseInt(str) || 0;
+        }
+
+        // ============================================================
         //  РАЗМЕР ОКНА
         // ============================================================
         function resizeCanvas() {
@@ -498,25 +529,25 @@
         class Player {
             constructor(data) {
                 this.id = data.id;
-                this.name = data.name;
-                this.password = data.password || '';
-                this.x = data.x || WORLD_SIZE / 2 * BLOCK;
-                this.y = data.y || WORLD_SIZE / 2 * BLOCK;
+                this.name = safeString(data.name);
+                this.password = safeString(data.password);
+                this.x = safeNumber(data.x) || WORLD_SIZE / 2 * BLOCK;
+                this.y = safeNumber(data.y) || WORLD_SIZE / 2 * BLOCK;
                 this.radius = 16;
                 this.speed = 3;
-                this.hp = data.hp || 100;
+                this.hp = safeNumber(data.hp) || 100;
                 this.maxHp = 100;
-                this.lives = data.lives !== undefined ? data.lives : MAX_LIVES;
+                this.lives = safeInt(data.lives) || MAX_LIVES;
                 this.maxLives = MAX_LIVES;
                 this.angle = 0;
-                this.kills = data.kills || 0;
-                this.money = data.money || 0;
+                this.kills = safeInt(data.kills);
+                this.money = safeInt(data.money);
                 this.alive = true;
                 this.color = '#4FC3F7';
-                this.faction = data.faction || 'none';
-                this.factionRole = data.factionRole || '';
-                this.isAdmin = data.isAdmin || false;
-                this.isBanned = data.isBanned || false;
+                this.faction = safeString(data.faction) || 'none';
+                this.factionRole = safeString(data.factionRole) || '';
+                this.isAdmin = data.isAdmin === true || data.isAdmin === '1' || data.isAdmin === 1;
+                this.isBanned = data.isBanned === true || data.isBanned === '1' || data.isBanned === 1;
             }
 
             get isLaw() { return this.faction === 'law'; }
@@ -810,13 +841,14 @@
             if (type === 'system') {
                 div.innerHTML = `<span class="system">[${time}] ${text}</span>`;
             } else if (type === 'admin') {
-                div.innerHTML = `<span class="time">[${time}]</span><span class="admin">👑 ${name}:</span> ${text}`;
+                div.innerHTML = `<span class="time">[${time}]</span><span class="admin">👑 ${safeString(name)}:</span> ${text}`;
             } else if (type === 'law') {
-                div.innerHTML = `<span class="time">[${time}]</span><span class="law">👮 ${name}:</span> ${text}`;
+                div.innerHTML = `<span class="time">[${time}]</span><span class="law">👮 ${safeString(name)}:</span> ${text}`;
             } else {
                 const isLaw = players[name]?.isLaw;
                 const cls = isLaw ? 'law' : '';
-                div.innerHTML = `<span class="time">[${time}]</span><span class="name ${cls}">${name}:</span> ${text}`;
+                div.innerHTML =
+                    `<span class="time">[${time}]</span><span class="name ${cls}">${safeString(name)}:</span> ${text}`;
             }
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
@@ -837,7 +869,7 @@
             addChatMessage('user', text, player.name);
             try {
                 await queryTurso(
-                    `INSERT INTO chat (player_name, message) VALUES ('${player.name.replace(/'/g, "''")}', '${text.replace(/'/g, "''")}')`
+                    `INSERT INTO chat (player_name, message) VALUES ('${safeString(player.name).replace(/'/g, "''")}', '${text.replace(/'/g, "''")}')`
                 );
             } catch (e) {}
         }
@@ -1013,22 +1045,12 @@
 
                 if (result && result.rows && result.rows.length > 0) {
                     const row = result.rows[0];
-                    
-                    // === РАЗБИРАЕМ ПАРОЛЬ ИЗ БД (ОБЪЕКТ ИЛИ СТРОКА) ===
-                    let dbPassword = '';
-                    if (row[2] !== undefined && row[2] !== null) {
-                        if (typeof row[2] === 'object') {
-                            // Если это объект — достаём значение
-                            dbPassword = String(row[2].value || row[2][0] || Object.values(row[2])[0] || '');
-                        } else {
-                            dbPassword = String(row[2]);
-                        }
-                    }
-                    dbPassword = dbPassword.trim();
+
+                    // === РАЗБИРАЕМ ПАРОЛЬ ИЗ БД ===
+                    const dbPassword = safeString(row[2]);
                     const inputPassword = password.trim();
 
                     console.log('🔍 Сравнение паролей:');
-                    console.log('📦 Из БД (сырой):', row[2]);
                     console.log('📦 Из БД (обработанный):', JSON.stringify(dbPassword));
                     console.log('⌨️ С формы:', JSON.stringify(inputPassword));
 
@@ -1038,18 +1060,18 @@
 
                     playerData = {
                         id: row[0],
-                        name: row[1],
+                        name: safeString(row[1]),
                         password: dbPassword,
-                        x: parseFloat(row[3]) || 0,
-                        y: parseFloat(row[4]) || 0,
-                        hp: parseFloat(row[5]) || 100,
-                        lives: parseInt(row[6]) || MAX_LIVES,
-                        kills: parseInt(row[7]) || 0,
-                        money: parseInt(row[8]) || 0,
-                        faction: row[9] || 'none',
-                        factionRole: row[10] || '',
-                        isAdmin: row[11] === '1',
-                        isBanned: row[12] === '1'
+                        x: safeNumber(row[3]),
+                        y: safeNumber(row[4]),
+                        hp: safeNumber(row[5]),
+                        lives: safeInt(row[6]),
+                        kills: safeInt(row[7]),
+                        money: safeInt(row[8]),
+                        faction: safeString(row[9]),
+                        factionRole: safeString(row[10]),
+                        isAdmin: row[11] === '1' || row[11] === 1 || row[11] === true,
+                        isBanned: row[12] === '1' || row[12] === 1 || row[12] === true
                     };
                 } else {
                     // ЕСЛИ ИГРОКА НЕТ — СОЗДАЁМ НОВОГО
@@ -1062,17 +1084,17 @@
                     if (!insertResult?.rows?.length) throw new Error('Не удалось создать игрока');
                     playerData = {
                         id: insertResult.rows[0][0],
-                        name,
-                        password,
-                        x,
-                        y,
+                        name: name,
+                        password: password,
+                        x: x,
+                        y: y,
                         hp: 100,
                         lives: MAX_LIVES,
                         kills: 0,
                         money: 0,
                         faction: 'none',
                         factionRole: '',
-                        isAdmin,
+                        isAdmin: isAdmin,
                         isBanned: false
                     };
                 }
@@ -1086,7 +1108,7 @@
                 const invResult = await queryTurso(`SELECT item, count FROM inventory WHERE player_id = '${playerData.id}'`);
                 if (invResult && invResult.rows) {
                     inventory = {};
-                    invResult.rows.forEach(r => { inventory[r[0]] = parseInt(r[1]) || 0; });
+                    invResult.rows.forEach(r => { inventory[safeString(r[0])] = safeInt(r[1]); });
                 }
 
                 // СОЗДАЁМ ОБЪЕКТ ИГРОКА
@@ -1101,7 +1123,7 @@
                 const chatResult = await queryTurso('SELECT player_name, message, created_at FROM chat ORDER BY id DESC LIMIT 20');
                 if (chatResult && chatResult.rows) {
                     chatResult.rows.reverse().forEach(row => {
-                        addChatMessage('user', row[1], row[0]);
+                        addChatMessage('user', safeString(row[1]), safeString(row[0]));
                     });
                 }
 
@@ -1139,17 +1161,17 @@
                         if (!players[row[0]]) {
                             const p = new Player({
                                 id: row[0],
-                                name: row[1],
-                                x: parseFloat(row[2]) || 0,
-                                y: parseFloat(row[3]) || 0,
-                                hp: parseFloat(row[4]) || 100,
-                                lives: parseInt(row[5]) || MAX_LIVES,
-                                kills: parseInt(row[6]) || 0,
-                                money: parseInt(row[7]) || 0,
-                                faction: row[8] || 'none',
-                                factionRole: row[9] || '',
-                                isAdmin: row[10] === '1',
-                                isBanned: row[11] === '1'
+                                name: safeString(row[1]),
+                                x: safeNumber(row[2]),
+                                y: safeNumber(row[3]),
+                                hp: safeNumber(row[4]),
+                                lives: safeInt(row[5]),
+                                kills: safeInt(row[6]),
+                                money: safeInt(row[7]),
+                                faction: safeString(row[8]),
+                                factionRole: safeString(row[9]),
+                                isAdmin: row[10] === '1' || row[10] === 1,
+                                isBanned: row[11] === '1' || row[11] === 1
                             });
                             players[row[0]] = p;
                         }
