@@ -408,30 +408,26 @@
         let seasonEnd = null;
 
         // ============================================================
-        //  ЗАПРОСЫ К TURSO (ТОЛЬКО ТЕКСТ)
+        //  ЗАПРОС К TURSO (БЕЗ ПАРАМЕТРОВ - ТОЛЬКО СТРОКА SQL)
         // ============================================================
-        async function queryTurso(sql, params = []) {
-            const body = {
-                requests: [{
-                    type: "execute",
-                    stmt: { sql: sql }
-                }]
-            };
-
-            if (params.length > 0) {
-                body.requests[0].stmt.args = params.map(p => String(p));
-            }
-
+        async function queryTurso(sql) {
+            console.log('📤 SQL:', sql);
             const resp = await fetch(`${TURSO_URL}/v2/pipeline`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${TURSO_TOKEN}`
                 },
-                body: JSON.stringify(body)
+                body: JSON.stringify({
+                    requests: [{
+                        type: "execute",
+                        stmt: { sql: sql }
+                    }]
+                })
             });
 
             const data = await resp.json();
+            console.log('📥 Ответ:', JSON.stringify(data, null, 2));
 
             if (!resp.ok) {
                 throw new Error(`HTTP ${resp.status}: ${data.error || JSON.stringify(data)}`);
@@ -841,8 +837,7 @@
             addChatMessage('user', text, player.name);
             try {
                 await queryTurso(
-                    'INSERT INTO chat (player_name, message) VALUES (?, ?)',
-                    [player.name, text]
+                    `INSERT INTO chat (player_name, message) VALUES ('${player.name}', '${text.replace(/'/g, "''")}')`
                 );
             } catch (e) {}
         }
@@ -966,8 +961,7 @@
                     seasonEnd = new Date(parseInt(result.rows[0][0]));
                 } else {
                     seasonEnd = new Date(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000);
-                    await queryTurso('INSERT INTO settings (key, value) VALUES ("season_end", ?)', [String(seasonEnd
-                        .getTime())]);
+                    await queryTurso(`INSERT INTO settings (key, value) VALUES ("season_end", "${seasonEnd.getTime()}")`);
                 }
 
                 if (Date.now() > seasonEnd.getTime()) {
@@ -975,9 +969,7 @@
                     await queryTurso('DELETE FROM players');
                     await queryTurso('DELETE FROM inventory');
                     await queryTurso('DELETE FROM chat');
-                    await queryTurso('UPDATE settings SET value = ? WHERE key = "season_end"', [String(Date.now() +
-                        SEASON_DAYS * 24 * 60 * 60 * 1000
-                    )]);
+                    await queryTurso(`UPDATE settings SET value = "${Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000}" WHERE key = "season_end"`);
                     seasonEnd = new Date(Date.now() + SEASON_DAYS * 24 * 60 * 60 * 1000);
                     showToast('🔄 НОВЫЙ СЕЗОН! ВСЁ ОБНУЛЕНО!');
                     location.reload();
@@ -988,7 +980,7 @@
         }
 
         // ============================================================
-        //  ЛОГИН
+        //  ЛОГИН (РАБОТАЕТ КАК ТВОЙ КОД С НИКОМ)
         // ============================================================
         async function login() {
             const name = document.getElementById('nameInput').value.trim();
@@ -1007,7 +999,7 @@
             try {
                 await checkSeason();
 
-                // СОЗДАЁМ ВСЕ ТАБЛИЦЫ (ПРОСТЫЕ, ВСЕ ПОЛЯ - ТЕКСТ)
+                // СОЗДАЁМ ТАБЛИЦЫ
                 await queryTurso(`
                     CREATE TABLE IF NOT EXISTS players (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1050,10 +1042,7 @@
                 `);
 
                 // ИЩЕМ ИГРОКА
-                let result = await queryTurso(
-                    'SELECT id, name, password, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE name = ?',
-                    [name]
-                );
+                let result = await queryTurso(`SELECT id, name, password, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE name = '${name.replace(/'/g, "''")}'`);
 
                 let playerData;
 
@@ -1082,8 +1071,7 @@
                     const y = Math.random() * 100 * BLOCK + 25 * BLOCK;
                     const isAdmin = (name === ADMIN_NAME);
                     const insertResult = await queryTurso(
-                        'INSERT INTO players (name, password, x, y, isAdmin) VALUES (?, ?, ?, ?, ?) RETURNING id',
-                        [name, password, String(x), String(y), isAdmin ? '1' : '0']
+                        `INSERT INTO players (name, password, x, y, isAdmin) VALUES ('${name.replace(/'/g, "''")}', '${password.replace(/'/g, "''")}', '${x}', '${y}', '${isAdmin ? 1 : 0}') RETURNING id`
                     );
                     if (!insertResult?.rows?.length) throw new Error('Не удалось создать игрока');
                     playerData = {
@@ -1108,8 +1096,7 @@
                 }
 
                 // ЗАГРУЖАЕМ ИНВЕНТАРЬ
-                const invResult = await queryTurso('SELECT item, count FROM inventory WHERE player_id = ?', [String(
-                    playerData.id)]);
+                const invResult = await queryTurso(`SELECT item, count FROM inventory WHERE player_id = '${playerData.id}'`);
                 if (invResult && invResult.rows) {
                     inventory = {};
                     invResult.rows.forEach(r => { inventory[r[0]] = parseInt(r[1]) || 0; });
@@ -1157,10 +1144,7 @@
         async function loadPlayers() {
             if (!playerId) return;
             try {
-                const result = await queryTurso(
-                    'SELECT id, name, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE id != ? AND isBanned = 0',
-                    [String(playerId)]
-                );
+                const result = await queryTurso(`SELECT id, name, x, y, hp, lives, kills, money, faction, factionRole, isAdmin, isBanned FROM players WHERE id != '${playerId}' AND isBanned = '0'`);
                 if (result && result.rows) {
                     result.rows.forEach(row => {
                         if (!players[row[0]]) {
@@ -1214,20 +1198,14 @@
             if (!player || !playerId || !isLoggedIn) return;
             try {
                 await queryTurso(
-                    'UPDATE players SET x = ?, y = ?, hp = ?, lives = ?, kills = ?, money = ?, faction = ?, factionRole = ? WHERE id = ?',
-                    [String(player.x), String(player.y), String(Math.floor(player.hp)), String(player.lives), String(
-                        player.kills), String(player.money), player.faction, player.factionRole, String(
-                    playerId)]
+                    `UPDATE players SET x = '${player.x}', y = '${player.y}', hp = '${Math.floor(player.hp)}', lives = '${player.lives}', kills = '${player.kills}', money = '${player.money}', faction = '${player.faction}', factionRole = '${player.factionRole}' WHERE id = '${playerId}'`
                 );
                 for (const [item, count] of Object.entries(inventory)) {
                     if (count === 0) {
-                        await queryTurso('DELETE FROM inventory WHERE player_id = ? AND item = ?', [String(playerId),
-                            item
-                        ]);
+                        await queryTurso(`DELETE FROM inventory WHERE player_id = '${playerId}' AND item = '${item}'`);
                     } else {
                         await queryTurso(
-                            'INSERT INTO inventory (player_id, item, count) VALUES (?, ?, ?) ON CONFLICT(player_id, item) DO UPDATE SET count = ?',
-                            [String(playerId), item, String(count), String(count)]
+                            `INSERT INTO inventory (player_id, item, count) VALUES ('${playerId}', '${item}', '${count}') ON CONFLICT(player_id, item) DO UPDATE SET count = '${count}'`
                         );
                     }
                 }
