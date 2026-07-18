@@ -20,7 +20,7 @@
         #loginOverlay button:hover { transform: scale(1.05); }
         .login-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
         .hidden { display: none !important; }
-        #errorMsg { color: #ff6b6b; font-size: 14px; margin-top: 10px; display: none; }
+        #errorMsg { color: #ff6b6b; font-size: 14px; margin-top: 10px; display: none; max-width: 400px; text-align: center; }
         #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 10px 24px; border-radius: 10px; font-size: 14px; border-left: 4px solid #ffd700; opacity: 0; transition: 0.3s; z-index: 999; }
         #toast.show { opacity: 1; }
     </style>
@@ -73,9 +73,9 @@ let mouse = { x: 0, y: 0 };
 let playerName = 'Гость';
 
 // ============================================================
-//  ЗАПРОС К TURSO (100% РАБОЧИЙ)
+//  ЗАПРОС К TURSO (БЕЗ ПАРАМЕТРОВ)
 // ============================================================
-async function queryTurso(sql, params = []) {
+async function queryTurso(sql) {
     const body = {
         requests: [{
             type: "execute",
@@ -83,9 +83,7 @@ async function queryTurso(sql, params = []) {
         }]
     };
     
-    if (params.length > 0) {
-        body.requests[0].stmt.args = params;
-    }
+    console.log('📤 SQL:', sql);
     
     const resp = await fetch(`${TURSO_URL}/v2/pipeline`, {
         method: 'POST',
@@ -97,7 +95,7 @@ async function queryTurso(sql, params = []) {
     });
     
     const data = await resp.json();
-    console.log('📥 Ответ Turso:', data);
+    console.log('📥 Ответ:', data);
     
     if (!resp.ok) {
         throw new Error(`HTTP ${resp.status}: ${JSON.stringify(data)}`);
@@ -107,6 +105,13 @@ async function queryTurso(sql, params = []) {
         return data.results[0].response.result;
     }
     return null;
+}
+
+// ============================================================
+//  ЭКРАНИРОВАНИЕ СТРОКИ ДЛЯ SQL
+// ============================================================
+function escapeSQL(str) {
+    return str.replace(/'/g, "''");
 }
 
 // ============================================================
@@ -317,6 +322,9 @@ async function login() {
     try {
         console.log('🔌 Подключение к Turso...');
         
+        // Экранируем имя для SQL
+        const safeName = escapeSQL(name);
+        
         // 1. СОЗДАЁМ ТАБЛИЦУ (если её нет)
         const createTableSQL = `
             CREATE TABLE IF NOT EXISTS players (
@@ -328,13 +336,13 @@ async function login() {
         await queryTurso(createTableSQL);
         console.log('✅ Таблица создана/проверена');
         
-        // 2. СОХРАНЯЕМ ИГРОКА (или обновляем)
+        // 2. СОХРАНЯЕМ ИГРОКА
         const insertSQL = `
             INSERT INTO players (name) 
-            VALUES (?) 
+            VALUES ('${safeName}') 
             ON CONFLICT(name) DO UPDATE SET name = excluded.name
         `;
-        await queryTurso(insertSQL, [name]);
+        await queryTurso(insertSQL);
         console.log(`✅ Игрок "${name}" сохранён в БД!`);
         
         // 3. ПОКАЗЫВАЕМ ВСЕХ ИГРОКОВ (для проверки)
@@ -372,7 +380,6 @@ gameLoop(0);
 
 console.log('🏕️ LuSMP загружена!');
 console.log('🌐 Turso URL:', TURSO_URL);
-console.log('🔑 Токен:', TURSO_TOKEN.substring(0, 20) + '...');
 </script>
 </body>
 </html>
